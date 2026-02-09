@@ -11,6 +11,33 @@
 - [x] Pulumi stub (infra/aws)
 - [x] CLAUDE.md updated with project details
 
+## AWS Deployment (Web + API via OpenNext + Terraform)
+- [x] Extract `app.ts` from `server.ts` (Fastify app factory)
+- [x] Create `lambda.ts` handler with `@fastify/aws-lambda`
+- [x] Create `esbuild.lambda.mjs` bundler config
+- [x] Add `build:lambda` script + `@fastify/aws-lambda`, `esbuild`, `@types/aws-lambda` deps
+- [x] Create `packages/web/open-next.config.ts` + `@opennextjs/aws` devDep
+- [x] Add `build:open-next` script to web package
+- [x] Add `build:deploy` orchestration script to root
+- [x] Update `.gitignore` (terraform state, dist-lambda, .open-next)
+- [x] Terraform bootstrap module (S3 state + DynamoDB locks)
+- [x] Terraform networking module (VPC, subnets, NAT, security groups)
+- [x] Terraform DNS module (Route53, ACM certs us-east-1 + us-west-2)
+- [x] Terraform database module (RDS PostgreSQL, RDS Proxy, Secrets Manager)
+- [x] Terraform API module (Lambda, API Gateway HTTP API, custom domain)
+- [x] Terraform web module (OpenNext wrapper, CloudFront, S3, Route53)
+- [x] Terraform dev environment (composes all modules, S3 backend)
+- [x] Lambda build verified: `pnpm --filter @clawforge/api build:lambda` succeeds (835KB bundle)
+
+### Deployment Steps (remaining)
+- [ ] `terraform init && terraform apply` bootstrap
+- [ ] `terraform init && terraform apply` networking + dns
+- [ ] Update domain registrar NS records (manual)
+- [ ] `terraform apply` database
+- [ ] `pnpm build:deploy` (build API bundle + OpenNext output)
+- [ ] `terraform apply` api + web
+- [ ] Verify: `curl https://api.clawforge.org/health` + visit `https://clawforge.org`
+
 ## Verification Results
 - [x] `pnpm install` — passes
 - [x] `pnpm --filter @clawforge/api build` — compiles cleanly

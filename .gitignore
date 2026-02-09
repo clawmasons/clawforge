@@ -32,3 +32,14 @@ docker-compose.override.yml
 # Pulumi
 infra/aws/.pulumi/
 infra/aws/node_modules/
+
+# Terraform
+infra/terraform/**/.terraform/
+infra/terraform/**/*.tfstate
+infra/terraform/**/*.tfstate.*
+
+# Lambda build output
+packages/api/dist-lambda/
+
+# OpenNext build output
+packages/web/.open-next/

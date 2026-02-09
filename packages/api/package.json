@@ -9,10 +9,13 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
+    "build:lambda": "node esbuild.lambda.mjs",
     "clean": "rm -rf dist",
     "start": "node dist/server.js"
   },
   "dependencies": {
+    "@fastify/aws-lambda": "^5.0.0",
+    "@fastify/cors": "^11.2.0",
     "@trpc/server": "^11.0.0",
     "drizzle-orm": "^0.39.0",
     "fastify": "^5.2.0",
@@ -20,8 +23,10 @@
     "zod": "^3.24.0"
   },
   "devDependencies": {
+    "@types/aws-lambda": "^8.10.0",
     "@types/node": "^22.0.0",
     "@types/pg": "^8.11.0",
+    "esbuild": "^0.25.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   }

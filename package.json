@@ -1,0 +1,15 @@
+{
+  "name": "clawforge",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --parallel --filter './packages/*' dev",
+    "build": "pnpm --filter './packages/*' build",
+    "clean": "pnpm --filter './packages/*' clean",
+    "clean:build": "pnpm clean && pnpm build",
+    "lint": "pnpm --filter './packages/*' lint"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@10.29.1"
+}

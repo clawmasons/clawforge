@@ -22,7 +22,6 @@ module "open_next" {
   prefix             = "${var.project}-web"
   folder_path        = var.open_next_build_path
   open_next_version  = "v3.x.x"
-  zone_suffix        = var.domain_name
 
   function_architecture = "arm64"
 

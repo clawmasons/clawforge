@@ -1,24 +1,7 @@
-import Fastify from "fastify";
-import {
-  fastifyTRPCPlugin,
-  FastifyTRPCPluginOptions,
-} from "@trpc/server/adapters/fastify";
-import { appRouter, type AppRouter } from "./router.js";
-
-const server = Fastify({ logger: true });
-
-// Health check
-server.get("/health", async () => ({ status: "ok", service: "api" }));
-
-// tRPC
-server.register(fastifyTRPCPlugin, {
-  prefix: "/trpc",
-  trpcOptions: {
-    router: appRouter,
-  } satisfies FastifyTRPCPluginOptions<AppRouter>["trpcOptions"],
-});
+import { createApp } from "./app.js";
 
 const start = async () => {
+  const server = await createApp();
   const port = Number(process.env.PORT ?? 4000);
   const host = process.env.HOST ?? "0.0.0.0";
 
@@ -27,6 +10,6 @@ const start = async () => {
 };
 
 start().catch((err) => {
-  server.log.error(err);
+  console.error(err);
   process.exit(1);
 });

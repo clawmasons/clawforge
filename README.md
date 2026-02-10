@@ -16,6 +16,14 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for a high-level overview of the componen
 # Install dependencies
 pnpm install
 
+# Set up environment variables
+cp .env.example .env
+# Edit .env with your Google OAuth credentials (see below)
+
+# Push database schema (requires Postgres running)
+docker compose -f infra/compose/docker-compose.yml up -d postgres
+pnpm --filter @clawforge/api db:push
+
 # Run all packages in dev mode
 pnpm dev
 
@@ -26,7 +34,7 @@ pnpm --filter @clawforge/web dev    # Web on :3000
 
 ## Docker Compose
 
-Brings up all services: PostgreSQL, API, Web, and OpenClaw.
+Brings up all services: PostgreSQL, API, Web, and OpenClaw. Auth env vars are read from the root `.env` file.
 
 ```bash
 docker compose -f infra/compose/docker-compose.yml up --build
@@ -56,8 +64,8 @@ pnpm clean
 ```
 clawforge/
 ├── packages/
-│   ├── api/             # Fastify + tRPC + Drizzle
-│   ├── web/             # Next.js 15 App Router
+│   ├── api/             # Fastify + tRPC + Drizzle + Better Auth
+│   ├── web/             # Next.js 15 App Router + Better Auth client
 │   └── shared/          # Shared TypeScript types
 ├── infra/
 │   ├── docker/          # Dockerfiles
@@ -136,6 +144,31 @@ open https://clawforge.org
 | Route53 | $0.50 |
 | **Total** | **~$47** |
 
+## Authentication
+
+Clawforge uses [Better Auth](https://better-auth.com) with Google OAuth. Only corporate email domains are allowed — consumer providers (Gmail, Yahoo, Outlook, etc.) are blocked at signup. Organizations are auto-created from the user's email domain.
+
+### Google OAuth Setup
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/) > APIs & Services > Credentials
+2. Create an OAuth 2.0 Client ID (Web application)
+3. Add authorized redirect URI: `http://localhost:4000/api/auth/callback/google`
+4. Add authorized JavaScript origin: `http://localhost:3000`
+5. Copy the Client ID and Secret to your `.env` file
+
+### Database Migrations
+
+```bash
+# Push schema to local Postgres (dev)
+pnpm --filter @clawforge/api db:push
+
+# Generate migration files (for production)
+pnpm --filter @clawforge/api db:generate
+
+# Run migrations
+pnpm --filter @clawforge/api db:migrate
+```
+
 ## Environment Variables
 
 | Variable | Used By | Default | Description |
@@ -144,3 +177,8 @@ open https://clawforge.org
 | `PORT` | api, openclaw | `4000` / `8080` | Server listen port |
 | `HOST` | api | `0.0.0.0` | Server bind address |
 | `NEXT_PUBLIC_API_URL` | web | `http://localhost:4000` | API base URL (client-side) |
+| `BETTER_AUTH_SECRET` | api | — | Secret key for session signing (32+ chars) |
+| `BETTER_AUTH_URL` | api | — | API base URL for auth callbacks |
+| `GOOGLE_CLIENT_ID` | api | — | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | api | — | Google OAuth client secret |
+| `WEB_URL` | api | `http://localhost:3000` | Web frontend URL (for CORS and redirects) |

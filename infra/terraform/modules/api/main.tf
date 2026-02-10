@@ -24,8 +24,13 @@ resource "aws_lambda_function" "api" {
 
   environment {
     variables = {
-      NODE_ENV     = "production"
-      DATABASE_URL = "postgresql://${var.db_username}:@${var.db_proxy_endpoint}:5432/${var.db_name}?sslmode=require"
+      NODE_ENV             = "production"
+      DATABASE_URL         = "postgresql://${var.db_username}:@${var.db_proxy_endpoint}:5432/${var.db_name}?sslmode=require"
+      BETTER_AUTH_SECRET   = var.better_auth_secret
+      BETTER_AUTH_URL      = "https://api.${var.domain_name}"
+      GOOGLE_CLIENT_ID     = var.google_client_id
+      GOOGLE_CLIENT_SECRET = var.google_client_secret
+      WEB_URL              = "https://${var.domain_name}"
     }
   }
 }
@@ -88,10 +93,11 @@ resource "aws_apigatewayv2_api" "api" {
   protocol_type = "HTTP"
 
   cors_configuration {
-    allow_origins = var.cors_origins
-    allow_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-    allow_headers = ["content-type", "authorization"]
-    max_age       = 3600
+    allow_origins     = var.cors_origins
+    allow_methods     = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    allow_headers     = ["content-type", "authorization", "cookie"]
+    allow_credentials = true
+    max_age           = 3600
   }
 }
 

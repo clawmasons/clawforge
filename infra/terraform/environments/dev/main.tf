@@ -38,6 +38,9 @@ module "api" {
   db_secret_arn            = module.database.db_secret_arn
   api_certificate_arn      = module.dns.api_certificate_arn
   zone_id                  = module.dns.zone_id
+  better_auth_secret       = var.better_auth_secret
+  google_client_id         = var.google_client_id
+  google_client_secret     = var.google_client_secret
 }
 
 module "web" {

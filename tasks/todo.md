@@ -38,6 +38,36 @@
 - [ ] `terraform apply` api + web
 - [ ] Verify: `curl https://api.clawforge.org/health` + visit `https://clawforge.org`
 
+## Better Auth Implementation
+- [x] Install better-auth + drizzle-kit in API
+- [x] Create `packages/api/src/auth.ts` — Better Auth config with Google OAuth, org plugin, domain restriction, auto org creation
+- [x] Create `packages/api/drizzle.config.ts` — Drizzle Kit config
+- [x] Update `packages/api/src/db/schema.ts` — Better Auth tables (user, session, account, verification, organization, member, invitation) + launchedProgramId field
+- [x] Update `packages/api/src/trpc.ts` — createContext with session, protectedProcedure middleware
+- [x] Update `packages/api/src/app.ts` — Mount auth catch-all route, CORS with credentials, pass createContext to tRPC
+- [x] Update `packages/api/src/router.ts` — Add `me` query, `programs.launch` mutation, update org table reference
+- [x] Add db:generate, db:migrate, db:push scripts to API package.json
+- [x] Install better-auth in web package
+- [x] Create `packages/web/src/lib/auth-client.ts` — Better Auth React client with org plugin
+- [x] Update `packages/web/src/lib/trpc-provider.tsx` — credentials: "include" on fetch
+- [x] Update `packages/web/src/components/header.tsx` — Auth-aware UI (sign in/out, avatar)
+- [x] Update `packages/web/src/components/program-card.tsx` — Launch flow with localStorage + auth redirect
+- [x] Create `packages/web/src/app/programs/launch/page.tsx` — Launch confirmation page
+- [x] Create `packages/web/src/app/auth/error/page.tsx` — Auth error page (domain rejection)
+- [x] Update `infra/compose/docker-compose.yml` — Auth env vars for API service
+- [x] Update `infra/terraform/modules/api/main.tf` — Auth env vars in Lambda, CORS credentials
+- [x] Update `infra/terraform/modules/api/variables.tf` — Auth variable declarations
+- [x] Update `infra/terraform/environments/dev/main.tf` — Pass auth vars to API module
+- [x] Update `infra/terraform/environments/dev/variables.tf` — Auth variable declarations
+- [x] All builds pass: `pnpm build` (tsc + next build), `pnpm build:lambda` (esbuild)
+
+### Remaining Steps
+- [ ] Set up Google Cloud Console OAuth credentials
+- [ ] Create `.env` with `BETTER_AUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+- [ ] Start Postgres + run `pnpm db:push` to sync schema
+- [ ] End-to-end test: sign up, domain restriction, launch flow
+- [ ] Set `terraform.tfvars` with auth secrets for production deploy
+
 ## Verification Results
 - [x] `pnpm install` — passes
 - [x] `pnpm --filter @clawforge/api build` — compiles cleanly

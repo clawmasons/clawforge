@@ -1,4 +1,8 @@
+"use client";
+
+import { useRouter } from "next/navigation";
 import type { Program } from "@/data/programs";
+import { signIn, useSession } from "@/lib/auth-client";
 
 export function ProgramCard({
   program,
@@ -7,6 +11,21 @@ export function ProgramCard({
   program: Program;
   activeTags: string[];
 }) {
+  const { data: session } = useSession();
+  const router = useRouter();
+
+  function handleLaunch() {
+    localStorage.setItem("pendingLaunchProgramId", program.id);
+    if (session) {
+      router.push("/programs/launch");
+    } else {
+      signIn.social({
+        provider: "google",
+        callbackURL: `${window.location.origin}/programs/launch`,
+      });
+    }
+  }
+
   return (
     <div className="group flex flex-col rounded-[18px] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 transition-transform hover:-translate-y-0.5">
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -33,7 +52,10 @@ export function ProgramCard({
       </p>
 
       <div className="mt-6 flex items-center justify-end border-t border-[var(--color-border)] pt-4">
-        <button className="rounded-full border border-[var(--color-border)] px-4 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--color-cream)]">
+        <button
+          onClick={handleLaunch}
+          className="rounded-full border border-[var(--color-border)] px-4 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--color-cream)]"
+        >
           Launch Now
         </button>
       </div>

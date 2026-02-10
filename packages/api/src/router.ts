@@ -1,7 +1,8 @@
 import { z } from "zod";
-import { router, publicProcedure } from "./trpc.js";
+import { eq } from "drizzle-orm";
+import { router, publicProcedure, protectedProcedure } from "./trpc.js";
 import { db } from "./db/index.js";
-import { organizations } from "./db/schema.js";
+import { organization, user } from "./db/schema.js";
 
 export const appRouter = router({
   hello: publicProcedure
@@ -10,10 +11,26 @@ export const appRouter = router({
       return { greeting: `Hello, ${input?.name ?? "world"}!` };
     }),
 
+  me: protectedProcedure.query(async ({ ctx }) => {
+    return ctx.user;
+  }),
+
   organizations: router({
     list: publicProcedure.query(async () => {
-      return db.select().from(organizations);
+      return db.select().from(organization);
     }),
+  }),
+
+  programs: router({
+    launch: protectedProcedure
+      .input(z.object({ programId: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        await db
+          .update(user)
+          .set({ launchedProgramId: input.programId })
+          .where(eq(user.id, ctx.user.id));
+        return { success: true };
+      }),
   }),
 });
 

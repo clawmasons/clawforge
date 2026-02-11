@@ -1,0 +1,67 @@
+---
+title: Getting Started
+description: Set up your local Clawforge development environment.
+---
+
+# Getting Started
+
+Get up and running with Clawforge in a few steps.
+
+## Prerequisites
+
+- **Node.js** 20+
+- **pnpm** 10+
+- **Docker** (for the database and services)
+
+## Install Dependencies
+
+```bash
+pnpm install
+```
+
+## Start the Dev Environment
+
+### Option 1: Docker Compose (recommended)
+
+Spins up PostgreSQL, the API, web app, and OpenClaw together:
+
+```bash
+docker compose -f infra/compose/docker-compose.yml up --build
+```
+
+### Option 2: Run packages individually
+
+Start any package on its own:
+
+```bash
+# API (port 4000)
+pnpm --filter @clawforge/api dev
+
+# Web (port 3000)
+pnpm --filter @clawforge/web dev
+```
+
+Or run everything at once:
+
+```bash
+pnpm dev
+```
+
+## Project Structure
+
+```
+clawforge/
+├── packages/
+│   ├── api/        # Fastify + tRPC + Drizzle
+│   ├── web/        # Next.js 15 App Router
+│   └── shared/     # Shared TypeScript types
+├── infra/
+│   ├── compose/    # Docker Compose config
+│   └── docker/     # Dockerfile for OpenClaw
+└── docs/           # Documentation (you are here)
+```
+
+## Next Steps
+
+- Explore the [Introduction](/docs) for an architecture overview
+- Check the API and Web package READMEs for package-specific details

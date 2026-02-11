@@ -18,3 +18,18 @@ _(Updated as corrections happen)_
 3. Don't change `AuthType` during debugging — it causes propagation delays and compounds confusion
 
 **Also learned**: `terraform apply -replace=<resource>` bypasses `lifecycle { ignore_changes }` for force-replacing resources — no need to change module config.
+
+## 2026-02-10: RDS Proxy IAM Auth — Empty Password Doesn't Work
+
+**Problem**: Lambda migrations (and all DB queries) failed with `28P01: The IAM authentication failed for the role clawforge`.
+
+**Root Cause**: `DATABASE_URL` had an empty password (`postgresql://clawforge:@proxy:5432/db`). RDS Proxy with `iam_auth = "REQUIRED"` requires an IAM auth token generated via `@aws-sdk/rds-signer`, not an empty/static password.
+
+**Fix**: Added `@aws-sdk/rds-signer` to generate an auth token at module load time in `db/index.ts` (top-level await). Only activates when `AWS_REGION` env var is present (i.e., in Lambda, not local dev).
+
+**Critical detail**: When passing an IAM auth token to `pg.Pool`, do NOT pass both `connectionString` and `password` — the connection string's empty password can win during client creation. Instead, pass individual options (`host`, `port`, `user`, `password`, `database`, `ssl`) to avoid ambiguity.
+
+**Also learned**:
+- Drizzle's `migrate()` always runs `CREATE SCHEMA IF NOT EXISTS` — which fails if the DB user lacks `CREATE` privilege. Custom migration runner needed for restricted users.
+- Drizzle wraps PostgreSQL errors as generic "Failed query: <sql>" — use raw `pg` client to surface actual error codes/messages when debugging.
+- The migration Lambda shares the same esbuild bundle as the API Lambda. All top-level imports (including Better Auth) initialize on module load, so the migration Lambda needs all the same env vars even though it only runs SQL.

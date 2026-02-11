@@ -8,7 +8,6 @@
 - [x] OpenClaw placeholder (infra/docker/openclaw)
 - [x] Dockerfiles for api, web, openclaw
 - [x] docker-compose.yml with postgres, api, web, openclaw
-- [x] Pulumi stub (infra/aws)
 - [x] CLAUDE.md updated with project details
 
 ## AWS Deployment (Web + API via OpenNext + Terraform)

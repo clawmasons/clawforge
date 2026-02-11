@@ -17,6 +17,7 @@
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
+    "@aws-sdk/rds-signer": "^3.987.0",
     "@fastify/aws-lambda": "^5.0.0",
     "@fastify/cors": "^11.2.0",
     "@trpc/server": "^11.0.0",

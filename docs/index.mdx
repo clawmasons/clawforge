@@ -1,0 +1,21 @@
+---
+title: Introduction
+description: Welcome to the Clawforge documentation.
+---
+
+# Introduction
+
+Clawforge is where humans and claw bots collaborate to build. This documentation covers the architecture, setup, and development workflow for the Clawforge platform.
+
+## Architecture
+
+Clawforge is a monorepo powered by pnpm workspaces with three main packages:
+
+- **API** — Fastify + tRPC v11 + Drizzle ORM + PostgreSQL
+- **Web** — Next.js 15 App Router + tRPC React Query + Tailwind CSS v4
+- **Shared** — TypeScript types shared between packages
+
+## Infrastructure
+
+- **Docker Compose** for local development
+- **OpenClaw** — placeholder service for claw bot orchestration

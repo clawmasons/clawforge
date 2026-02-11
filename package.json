@@ -7,7 +7,7 @@
     "clean": "pnpm --filter './packages/*' clean",
     "clean:build": "pnpm clean && pnpm build",
     "lint": "pnpm --filter './packages/*' lint",
-    "build:deploy": "pnpm build && pnpm --filter @clawforge/api build:lambda && pnpm --filter @clawforge/web build:open-next"
+    "build:deploy": "pnpm build && pnpm --filter @clawforge/api build:lambda"
   },
   "engines": {
     "node": ">=22"

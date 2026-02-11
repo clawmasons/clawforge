@@ -87,6 +87,50 @@ resource "aws_iam_role_policy" "lambda_rds" {
   })
 }
 
+# Migration Lambda function (same zip, same VPC, different handler)
+resource "aws_lambda_function" "migrate" {
+  function_name    = "${var.project}-api-migrate"
+  filename         = data.archive_file.api.output_path
+  source_code_hash = data.archive_file.api.output_base64sha256
+  handler          = "index.migrateHandler"
+  runtime          = "nodejs22.x"
+  architectures    = ["arm64"]
+  memory_size      = 512
+  timeout          = 60
+
+  role = aws_iam_role.lambda.arn
+
+  vpc_config {
+    subnet_ids         = var.private_subnet_ids
+    security_group_ids = [var.lambda_security_group_id]
+  }
+
+  # Same env vars as API Lambda — the shared bundle initializes Better Auth on module load
+  environment {
+    variables = {
+      NODE_ENV             = "production"
+      DATABASE_URL         = "postgresql://${var.db_username}:@${var.db_proxy_endpoint}:5432/${var.db_name}?sslmode=require"
+      BETTER_AUTH_SECRET   = var.better_auth_secret
+      BETTER_AUTH_URL      = "https://api.${var.domain_name}"
+      GOOGLE_CLIENT_ID     = var.google_client_id
+      GOOGLE_CLIENT_SECRET = var.google_client_secret
+      WEB_URL              = "https://${var.domain_name}"
+    }
+  }
+}
+
+# Run migrations on every deploy (re-triggers when Lambda code changes)
+resource "aws_lambda_invocation" "migrate" {
+  function_name = aws_lambda_function.migrate.function_name
+  input         = jsonencode({ action = "migrate" })
+
+  depends_on = [aws_lambda_function.migrate]
+
+  triggers = {
+    source_code_hash = data.archive_file.api.output_base64sha256
+  }
+}
+
 # API Gateway HTTP API
 resource "aws_apigatewayv2_api" "api" {
   name          = "${var.project}-api"

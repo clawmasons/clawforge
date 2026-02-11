@@ -29,10 +29,6 @@ pnpm-debug.log*
 # Docker
 docker-compose.override.yml
 
-# Pulumi
-infra/aws/.pulumi/
-infra/aws/node_modules/
-
 # Terraform
 infra/terraform/**/.terraform/
 infra/terraform/**/*.tfstate
@@ -43,3 +39,6 @@ packages/api/dist-lambda/
 
 # OpenNext build output
 packages/web/.open-next/
+
+# Fumadocs MDX generated
+packages/web/.source/

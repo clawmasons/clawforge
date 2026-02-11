@@ -1,4 +1,5 @@
 import { build } from "esbuild";
+import { cpSync } from "fs";
 
 await build({
   entryPoints: ["src/lambda.ts"],
@@ -16,4 +17,7 @@ await build({
   },
 });
 
+cpSync("drizzle", "dist-lambda/drizzle", { recursive: true });
+
 console.log("Lambda bundle built: dist-lambda/index.mjs");
+console.log("Migration files copied to dist-lambda/drizzle");

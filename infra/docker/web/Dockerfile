@@ -16,8 +16,9 @@ COPY tsconfig.base.json ./
 COPY packages/web packages/web
 COPY packages/shared packages/shared
 COPY packages/api packages/api
+COPY docs docs
 ENV NEXT_PUBLIC_API_URL=http://localhost:4000
-RUN pnpm --filter @clawforge/web build
+RUN pnpm --filter @clawforge/web build:next
 
 FROM node:22-alpine AS runner
 WORKDIR /app

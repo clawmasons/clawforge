@@ -1,13 +1,17 @@
 @import "tailwindcss";
+@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/preset.css";
+
+@source "../../../node_modules/fumadocs-ui/dist/**/*.js";
 
 @theme {
-  --color-cream: #f8f5ef;
+  --color-cream: #1a1816;
   --color-coral: #ff6b4a;
   --color-coral-deep: #e54f31;
-  --color-ink: #1d1a17;
-  --color-muted: #6b6560;
-  --color-surface: #ffffff;
-  --color-border: #e8e4de;
+  --color-ink: #f0ece6;
+  --color-muted: #9c9690;
+  --color-surface: #242120;
+  --color-border: #3a3632;
 
   --font-display: var(--font-bricolage), ui-serif, serif;
   --font-body: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
@@ -38,12 +42,12 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-cream: #1a1816;
-    --color-ink: #f0ece6;
-    --color-muted: #9c9690;
-    --color-surface: #242120;
-    --color-border: #3a3632;
-  }
+:root {
+  --color-fd-background: var(--color-cream);
+  --color-fd-foreground: var(--color-ink);
+  --color-fd-muted-foreground: var(--color-muted);
+  --color-fd-card: var(--color-surface);
+  --color-fd-border: var(--color-border);
+  --color-fd-primary: var(--color-coral);
+  --fd-nav-height: 3.5rem;
 }

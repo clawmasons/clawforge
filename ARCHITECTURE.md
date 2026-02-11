@@ -70,9 +70,11 @@ Deployed to AWS us-west-2 via Terraform. The web frontend is served through Open
 
 **Web (clawforge.org)**: Next.js 15 built with OpenNext, deployed as Lambda SSR + S3 static assets behind CloudFront. The OpenNext Terraform module (`RJPearson94/open-next/aws`) manages the Lambda functions, S3 bucket, DynamoDB ISR cache, SQS revalidation queue, and CloudFront distribution.
 
-**API (api.clawforge.org)**: Fastify/tRPC bundled with esbuild into a single Lambda function, fronted by API Gateway HTTP API v2 with CORS. Connects to PostgreSQL via RDS Proxy for connection pooling.
+**API (api.clawforge.org)**: Fastify/tRPC bundled with esbuild into a single Lambda function, fronted by API Gateway HTTP API v2 with CORS. Connects to PostgreSQL via RDS Proxy with IAM authentication — an auth token is generated at module load time via `@aws-sdk/rds-signer`.
 
-**Database**: RDS PostgreSQL (t4g.micro) in private subnets, accessed through RDS Proxy with IAM auth. Credentials stored in Secrets Manager.
+**Migrations**: A dedicated migration Lambda shares the same zip as the API Lambda but uses `index.migrateHandler`. Terraform invokes it automatically on every deploy (via `aws_lambda_invocation`) when the source code hash changes. See [Database Migrations](#database-migrations) below.
+
+**Database**: RDS PostgreSQL (t4g.micro) in private subnets, accessed through RDS Proxy with IAM auth (`iam_auth = "REQUIRED"`). The proxy authenticates to RDS using credentials from Secrets Manager; clients (Lambda) authenticate to the proxy using IAM auth tokens.
 
 **Networking**: VPC with 2 public and 2 private subnets across us-west-2a/b. Single NAT gateway for cost savings. Security groups chained: Lambda SG → RDS Proxy SG → RDS SG.
 
@@ -92,6 +94,37 @@ infra/terraform/
 └── environments/
     └── dev/             # Composes all modules for dev deployment
 ```
+
+## Database Migrations
+
+Migrations are automated as part of the Terraform deploy pipeline.
+
+### Workflow
+
+1. Modify the schema in `packages/api/src/db/schema.ts`
+2. Generate migration files: `pnpm --filter @clawforge/api db:generate`
+3. Commit the generated files in `packages/api/drizzle/` to git
+4. Build: `pnpm build:deploy` — esbuild bundles the Lambda, then copies `drizzle/` into `dist-lambda/`
+5. Deploy: `terraform apply` — creates/updates the migration Lambda and invokes it
+
+### How it works
+
+The migration Lambda (`migrateHandler` in `packages/api/src/lambda.ts`) uses a custom runner instead of Drizzle's built-in `migrate()`. This is because:
+
+- Drizzle's migrator always runs `CREATE SCHEMA IF NOT EXISTS`, which requires `CREATE` privilege on the database — the RDS Proxy IAM-auth user doesn't have this
+- The custom runner creates a `__drizzle_migrations` tracking table in the `public` schema using `CREATE TABLE IF NOT EXISTS`
+- It reads Drizzle's journal (`drizzle/meta/_journal.json`), checks which migrations are already applied, and runs only pending ones
+- Each migration's SQL is split on `--> statement-breakpoint` markers and executed statement-by-statement
+
+### Key files
+
+| File | Purpose |
+|------|---------|
+| `packages/api/src/db/schema.ts` | Drizzle schema (source of truth) |
+| `packages/api/drizzle/` | Generated migration SQL + journal (committed) |
+| `packages/api/src/lambda.ts` | `migrateHandler` — custom migration runner |
+| `packages/api/esbuild.lambda.mjs` | Copies `drizzle/` into Lambda bundle |
+| `infra/terraform/modules/api/main.tf` | Migration Lambda + `aws_lambda_invocation` |
 
 ## Local Development Infrastructure
 
@@ -122,7 +155,7 @@ Browser                     Web (:3000)                API (:4000)              
 - `packages/web/src/lib/auth-client.ts` — Better Auth React client
 - `packages/api/src/trpc.ts` — `createContext` resolves session from cookies; `protectedProcedure` middleware
 
-**Database schema**: Better Auth manages `user`, `session`, `account`, `verification`, `organization`, `member`, and `invitation` tables (defined in `packages/api/src/db/schema.ts`). Migrations are managed via Drizzle Kit.
+**Database schema**: Better Auth manages `user`, `session`, `account`, `verification`, `organization`, `member`, and `invitation` tables (defined in `packages/api/src/db/schema.ts`). In production, schema changes are applied via [automated migrations](#database-migrations). In local dev, use `db:push` for direct schema sync.
 
 ## Type Safety Flow
 

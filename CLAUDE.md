@@ -9,7 +9,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Web**: Next.js 15 App Router + tRPC React Query + Tailwind CSS v4 (`packages/web`, port 3000)
 - **Shared**: TypeScript types shared between packages (`packages/shared`)
 - **OpenClaw**: Placeholder service (`infra/docker/openclaw`, port 8080)
-- **IaC**: Pulumi (stub at `infra/aws/`)
 - **Docker**: Compose-based dev environment (`infra/compose/docker-compose.yml`)
 
 ## Commands

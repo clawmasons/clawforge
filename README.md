@@ -55,14 +55,21 @@ pnpm build
 # Clean build artifacts and rebuild from scratch
 pnpm clean:build
 
-# Clean only (removes dist/, .next/, out/)
+# Clean only (removes dist/, .next/, .open-next/, out/)
 pnpm clean
 ```
+
+## Documentation
+
+Documentation is built with [Fumadocs](https://fumadocs.vercel.app) and served at `/docs`. Content lives in the `docs/` folder at the monorepo root as MDX files.
+
+Visit [localhost:3000/docs](http://localhost:3000/docs) when running the dev server.
 
 ## Repository Structure
 
 ```
 clawforge/
+├── docs/                # Documentation (MDX, served at /docs)
 ├── packages/
 │   ├── api/             # Fastify + tRPC + Drizzle + Better Auth
 │   ├── web/             # Next.js 15 App Router + Better Auth client
@@ -119,7 +126,7 @@ terraform apply -target=module.database
 cd ../../../..
 pnpm build:deploy    # builds Next.js, OpenNext output, and API Lambda bundle
 
-# Deploy API + Web
+# Deploy API + Web (migrations run automatically)
 cd infra/terraform/environments/dev
 terraform apply
 ```
@@ -158,16 +165,32 @@ Clawforge uses [Better Auth](https://better-auth.com) with Google OAuth. Only co
 
 ### Database Migrations
 
-```bash
-# Push schema to local Postgres (dev)
-pnpm --filter @clawforge/api db:push
+**Local development** uses `db:push` which syncs the schema directly without migration files:
 
-# Generate migration files (for production)
+```bash
+pnpm --filter @clawforge/api db:push
+```
+
+**Production** uses versioned migration files applied automatically during deployment:
+
+```bash
+# 1. Generate migration files after schema changes
 pnpm --filter @clawforge/api db:generate
 
-# Run migrations
-pnpm --filter @clawforge/api db:migrate
+# 2. Commit the generated files in packages/api/drizzle/
+
+# 3. Build and deploy — migrations run automatically via Terraform
+pnpm build:deploy
+cd infra/terraform/environments/dev && ./tf.sh apply
 ```
+
+Migrations are applied by a dedicated Lambda function (`migrateHandler` in `packages/api/src/lambda.ts`) that is automatically invoked by Terraform on every deploy. The migration Lambda:
+
+- Shares the same bundle as the API Lambda (same zip, different handler)
+- Uses a custom runner (not Drizzle's built-in `migrate()`) to avoid `CREATE SCHEMA` privilege requirements
+- Tracks applied migrations in a `__drizzle_migrations` table in the `public` schema
+- Is idempotent — safe to re-run on unchanged schemas
+- Re-triggers only when the Lambda source code hash changes
 
 ## Environment Variables
 

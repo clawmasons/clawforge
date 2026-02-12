@@ -46,34 +46,6 @@ Next.js 15 App Router with React 19, tRPC React Query for data fetching, and Tai
 Minimal Node.js HTTP server that will be replaced with the real OpenClaw service.
 
 
-
-### Workflow
-
-1. Modify the schema in `packages/api/src/db/schema.ts`
-2. Generate migration files: `pnpm --filter @clawforge/api db:generate`
-3. Commit the generated files in `packages/api/drizzle/` to git
-4. Build: `pnpm build:deploy` — esbuild bundles the Lambda, then copies `drizzle/` into `dist-lambda/`
-5. Deploy: `terraform apply` — creates/updates the migration Lambda and invokes it
-
-### How it works
-
-The migration Lambda (`migrateHandler` in `packages/api/src/lambda.ts`) uses a custom runner instead of Drizzle's built-in `migrate()`. This is because:
-
-- Drizzle's migrator always runs `CREATE SCHEMA IF NOT EXISTS`, which requires `CREATE` privilege on the database — the RDS Proxy IAM-auth user doesn't have this
-- The custom runner creates a `__drizzle_migrations` tracking table in the `public` schema using `CREATE TABLE IF NOT EXISTS`
-- It reads Drizzle's journal (`drizzle/meta/_journal.json`), checks which migrations are already applied, and runs only pending ones
-- Each migration's SQL is split on `--> statement-breakpoint` markers and executed statement-by-statement
-
-### Key files
-
-| File | Purpose |
-|------|---------|
-| `packages/api/src/db/schema.ts` | Drizzle schema (source of truth) |
-| `packages/api/drizzle/` | Generated migration SQL + journal (committed) |
-| `packages/api/src/lambda.ts` | `migrateHandler` — custom migration runner |
-| `packages/api/esbuild.lambda.mjs` | Copies `drizzle/` into Lambda bundle |
-| `infra/terraform/modules/api/main.tf` | Migration Lambda + `aws_lambda_invocation` |
-
 ## Local Development Infrastructure
 
 Dockerfiles live in `infra/docker/` (one per service). Docker Compose config is at `infra/compose/docker-compose.yml`.

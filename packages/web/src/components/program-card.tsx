@@ -33,9 +33,11 @@ export function ProgramCard({
           <span
             key={tag}
             className={`rounded-full px-3 py-1 text-xs font-medium ${
-              activeTags.includes(tag)
-                ? "bg-[var(--color-fg)] text-[var(--color-bg)]"
-                : "bg-[var(--color-cream)] text-[var(--color-muted)]"
+              tag === "Open"
+                ? "bg-[var(--color-coral)] text-white"
+                : activeTags.includes(tag)
+                  ? "bg-[var(--color-fg)] text-[var(--color-bg)]"
+                  : "bg-[var(--color-cream)] text-[var(--color-muted)]"
             }`}
           >
             {tag}
@@ -56,7 +58,7 @@ export function ProgramCard({
           onClick={handleLaunch}
           className="rounded-full border border-[var(--color-border)] px-4 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--color-cream)]"
         >
-          Launch Now
+          {program.callToAction}
         </button>
       </div>
     </div>

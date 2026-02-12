@@ -14,14 +14,17 @@ export function ProgramsGrid({
   filterable?: boolean;
 }) {
   const [search, setSearch] = useState("");
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>(["Featured"]);
 
   const allTags = useMemo(() => {
     const tagSet = new Set<string>();
     for (const p of programs) {
       for (const t of p.tags) tagSet.add(t);
     }
-    return Array.from(tagSet).sort();
+    const sorted = Array.from(tagSet).sort();
+    const idx = sorted.indexOf("Featured");
+    if (idx > 0) sorted.unshift(...sorted.splice(idx, 1));
+    return sorted;
   }, [programs]);
 
   const matchingTags = useMemo(() => {

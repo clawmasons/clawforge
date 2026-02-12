@@ -34,16 +34,17 @@ export function Header() {
 
         <div className="flex items-center gap-6">
           <Link
-            href="/docs"
-            className="text-sm font-medium text-[var(--color-muted)] transition-colors hover:text-[var(--color-ink)]"
-          >
-            Docs
-          </Link>
-          <Link
             href="/programs"
             className="text-sm font-medium text-[var(--color-muted)] transition-colors hover:text-[var(--color-ink)]"
           >
             Programs
+          </Link>
+
+          <Link
+            href="/docs"
+            className="text-sm font-medium text-[var(--color-muted)] transition-colors hover:text-[var(--color-ink)]"
+          >
+            Docs
           </Link>
 
           {isPending ? (

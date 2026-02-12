@@ -6,7 +6,7 @@ export default function Home() {
   return (
     <main>
       <Hero />
-      <ProgramsGrid programs={programs} title="Featured Programs" />
+      <ProgramsGrid programs={programs} title="Featured Programs" filterable />
     </main>
   );
 }

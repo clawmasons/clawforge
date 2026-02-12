@@ -29,10 +29,6 @@ pnpm-debug.log*
 # Docker
 docker-compose.override.yml
 
-# Terraform
-infra/terraform/**/.terraform/
-infra/terraform/**/*.tfstate
-infra/terraform/**/*.tfstate.*
 
 # Lambda build output
 packages/api/dist-lambda/

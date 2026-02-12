@@ -8,7 +8,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for a high-level overview of the componen
 
 - Node.js >= 22
 - pnpm (`npm install -g pnpm`)
-- Docker (for the full stack)
+- Docker 
 
 ## Getting Started
 
@@ -57,6 +57,9 @@ pnpm clean:build
 
 # Clean only (removes dist/, .next/, .open-next/, out/)
 pnpm clean
+
+# build nextjs (used to push to prod)
+pnpm build:deploy
 ```
 
 ## Documentation
@@ -76,59 +79,8 @@ clawforge/
 │   └── shared/          # Shared TypeScript types
 ├── infra/
 │   ├── docker/          # Dockerfiles
-│   ├── compose/         # docker-compose.yml
-│   └── terraform/       # AWS infrastructure (Terraform)
-│       ├── bootstrap/   # State bucket + lock table
-│       ├── modules/     # networking, dns, database, api, web
-│       └── environments/dev/
+│   └── compose/         # docker-compose.yml
 └── tasks/               # Task tracking
-```
-
-## AWS Deployment (Terraform)
-
-### Prerequisites
-
-- [Terraform](https://developer.hashicorp.com/terraform/install) >= 1.5
-- AWS CLI configured with credentials
-- Domain `clawforge.org` registered
-
-### 1. Bootstrap (one-time)
-
-Creates the S3 bucket for Terraform state and DynamoDB table for locking.
-
-```bash
-cd infra/terraform/bootstrap
-terraform init
-terraform apply
-```
-
-### 2. Deploy infrastructure
-
-```bash
-cd infra/terraform/environments/dev
-terraform init
-```
-
-Apply in stages — networking and DNS first, since the domain registrar NS records need updating before certificates can validate:
-
-```bash
-# Networking + DNS (creates Route53 zone)
-terraform apply -target=module.networking -target=module.dns
-```
-
-Update your domain registrar with the NS records from the output, then wait for DNS propagation before continuing.
-
-```bash
-# Database
-terraform apply -target=module.database
-
-# Build application artifacts
-cd ../../../..
-pnpm build:deploy    # builds Next.js, OpenNext output, and API Lambda bundle
-
-# Deploy API + Web (migrations run automatically)
-cd infra/terraform/environments/dev
-terraform apply
 ```
 
 ### 3. Verify
@@ -139,17 +91,6 @@ curl https://api.clawforge.org/health
 
 open https://clawforge.org
 ```
-
-### Cost estimate (dev)
-
-| Resource | Monthly |
-|----------|---------|
-| NAT Gateway | ~$32 |
-| RDS t4g.micro | ~$12 |
-| Lambda (low traffic) | ~$0 |
-| CloudFront + S3 | ~$2 |
-| Route53 | $0.50 |
-| **Total** | **~$47** |
 
 ## Authentication
 

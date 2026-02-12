@@ -45,59 +45,7 @@ Next.js 15 App Router with React 19, tRPC React Query for data fetching, and Tai
 
 Minimal Node.js HTTP server that will be replaced with the real OpenClaw service.
 
-## Production Architecture (AWS)
 
-Deployed to AWS us-west-2 via Terraform. The web frontend is served through OpenNext (CloudFront + Lambda SSR), and the API runs as a Lambda behind API Gateway.
-
-```
-                    clawforge.org              api.clawforge.org
-                         │                           │
-                    ┌────▼────┐                ┌─────▼──────┐
-                    │CloudFront│                │API Gateway  │
-                    │  (CDN)   │                │ HTTP API v2 │
-                    └────┬────┘                └─────┬──────┘
-                    ┌────▼────┐                ┌─────▼──────┐
-             ┌──────┤  Lambda  │               │  Lambda     │──── VPC ────┐
-             │      │  (SSR)   │               │  (Fastify)  │             │
-             │      └─────────┘                └────────────┘       ┌─────▼──────┐
-        ┌────▼────┐                                                 │  RDS Proxy  │
-        │   S3    │                                                 └─────┬──────┘
-        │(assets) │                                                 ┌─────▼──────┐
-        └─────────┘                                                 │ RDS Postgres│
-                                                                    │ (t4g.micro) │
-                                                                    └────────────┘
-```
-
-**Web (clawforge.org)**: Next.js 15 built with OpenNext, deployed as Lambda SSR + S3 static assets behind CloudFront. The OpenNext Terraform module (`RJPearson94/open-next/aws`) manages the Lambda functions, S3 bucket, DynamoDB ISR cache, SQS revalidation queue, and CloudFront distribution.
-
-**API (api.clawforge.org)**: Fastify/tRPC bundled with esbuild into a single Lambda function, fronted by API Gateway HTTP API v2 with CORS. Connects to PostgreSQL via RDS Proxy with IAM authentication — an auth token is generated at module load time via `@aws-sdk/rds-signer`.
-
-**Migrations**: A dedicated migration Lambda shares the same zip as the API Lambda but uses `index.migrateHandler`. Terraform invokes it automatically on every deploy (via `aws_lambda_invocation`) when the source code hash changes. See [Database Migrations](#database-migrations) below.
-
-**Database**: RDS PostgreSQL (t4g.micro) in private subnets, accessed through RDS Proxy with IAM auth (`iam_auth = "REQUIRED"`). The proxy authenticates to RDS using credentials from Secrets Manager; clients (Lambda) authenticate to the proxy using IAM auth tokens.
-
-**Networking**: VPC with 2 public and 2 private subnets across us-west-2a/b. Single NAT gateway for cost savings. Security groups chained: Lambda SG → RDS Proxy SG → RDS SG.
-
-**DNS & TLS**: Route53 hosted zone for clawforge.org. ACM certificates in us-east-1 (CloudFront) and us-west-2 (API Gateway), both DNS-validated.
-
-### Terraform Layout
-
-```
-infra/terraform/
-├── bootstrap/           # S3 state bucket + DynamoDB lock table
-├── modules/
-│   ├── networking/      # VPC, subnets, NAT, security groups
-│   ├── dns/             # Route53, ACM certificates
-│   ├── database/        # RDS PostgreSQL, RDS Proxy, Secrets Manager
-│   ├── api/             # Lambda, API Gateway, custom domain
-│   └── web/             # OpenNext module (CloudFront, S3, Lambda SSR)
-└── environments/
-    └── dev/             # Composes all modules for dev deployment
-```
-
-## Database Migrations
-
-Migrations are automated as part of the Terraform deploy pipeline.
 
 ### Workflow
 

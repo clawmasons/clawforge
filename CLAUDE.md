@@ -8,8 +8,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **API**: Fastify + tRPC v11 + Drizzle ORM + PostgreSQL (`packages/api`, port 4000)
 - **Web**: Next.js 15 App Router + tRPC React Query + Tailwind CSS v4 (`packages/web`, port 3000)
 - **Shared**: TypeScript types shared between packages (`packages/shared`)
-- **OpenClaw**: Placeholder service (`infra/docker/openclaw`, port 8080)
-- **Docker**: Compose-based dev environment (`infra/compose/docker-compose.yml`)
+- **Server**: `clawforge` CLI for running clawbots locally (`packages/server`)
+- **Docker**: Compose-based dev environment (`infra/clawforge-server/docker-compose.yml`)
 
 ## Commands
 
@@ -28,7 +28,7 @@ pnpm --filter @clawforge/web dev
 pnpm build
 
 # Docker dev environment
-docker compose -f infra/compose/docker-compose.yml up --build
+docker compose -f infra/clawforge-server/docker-compose.yml up --build
 ```
 
 ## Repository

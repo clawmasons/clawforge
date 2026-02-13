@@ -1,0 +1,57 @@
+
+x-openclaw-common: &openclaw-common
+    # macos
+    platform: linux/arm64
+    build:
+      context: ./docker/openclaw
+      dockerfile: Dockerfile
+    stdin_open: true
+    tty: true
+
+    ports:
+      - "127.0.0.1:18789:18789"
+
+    environment:
+      - CODEX_HOME=/home/pn/workspace/.codex
+
+    # Security hardening
+    read_only: true
+      #tmpfs:
+      #- /tmp:size=256m
+      #- /home/node/.cache:size=128m,uid=1000,gid=1000
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+    security_opt:
+      - no-new-privileges:true
+
+
+services:
+
+  openclaw-bash:
+    profiles:
+      - tools
+    <<: *openclaw-common
+  
+  openclaw-gateway:
+    <<: *openclaw-common
+    command:
+      [
+        "openclaw",
+        "gateway",
+        "--bind",
+        "lan",
+        "--verbose"
+      ]
+    volumes:
+      - ./home:/home/pn
+      - ./home.orig:/home/pn.orig:ro
+      - ./openclaw:/home/pn/.openclaw
+      - ./workspace:/home/pn/workspace
+      - ./tmp:/tmp
+    
+
+volumes:
+  pgdata:

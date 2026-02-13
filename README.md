@@ -21,7 +21,7 @@ cp .env.example .env
 # Edit .env with your Google OAuth credentials (see below)
 
 # Push database schema (requires Postgres running)
-docker compose -f infra/compose/docker-compose.yml up -d postgres
+docker compose -f infra/clawforge-server/docker-compose.yml up -d postgres
 pnpm --filter @clawforge/api db:push
 
 # Run all packages in dev mode
@@ -34,10 +34,10 @@ pnpm --filter @clawforge/web dev    # Web on :3000
 
 ## Docker Compose
 
-Brings up all services: PostgreSQL, API, Web, and OpenClaw. Auth env vars are read from the root `.env` file.
+Brings up all services: PostgreSQL, API, and Web. Auth env vars are read from the root `.env` file.
 
 ```bash
-docker compose -f infra/compose/docker-compose.yml up --build
+docker compose -f infra/clawforge-server/docker-compose.yml up --build
 ```
 
 | Service    | Port |
@@ -45,7 +45,6 @@ docker compose -f infra/compose/docker-compose.yml up --build
 | Web       | 3000 |
 | API       | 4000 |
 | PostgreSQL| 5432 |
-| OpenClaw  | 8080 |
 
 ## Build
 
@@ -75,11 +74,12 @@ clawforge/
 ├── docs/                # Documentation (MDX, served at /docs)
 ├── packages/
 │   ├── api/             # Fastify + tRPC + Drizzle + Better Auth
+│   ├── server/          # clawforge CLI (Commander.js)
 │   ├── web/             # Next.js 15 App Router + Better Auth client
 │   └── shared/          # Shared TypeScript types
 ├── infra/
-│   ├── docker/          # Dockerfiles
-│   └── compose/         # docker-compose.yml
+│   ├── bot/common/      # Bot docker & scripts (OpenClaw, extract-home)
+│   └── clawforge-server/# Org server docker-compose & Dockerfiles
 └── tasks/               # Task tracking
 ```
 

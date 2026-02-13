@@ -57,7 +57,7 @@ Exit plan mode with `ExitPlanMode` to present the plan for user approval.
 
 ## Phase 4: Write Plan to Disk
 
-Once the user approves the plan, create the `tasks/` directory if it doesn't exist, then write the plan to `tasks/issue-ISSUE_NUMBER-plan.md` with the following format:
+Once the user approves the plan, create the `tasks/` directory if it doesn't exist, then write the plan to `tasks/issue-ISSUE_NUMBER-plan.md` with the following format using future tense since this is something that is going to happen next:
 
 ```markdown
 # Issue ISSUE_NUMBER: <issue title>
@@ -135,23 +135,36 @@ Fixes #ISSUE_NUMBER
 
 2. Add the plan as a comment on the GitHub issue:
 
+use the plan as it was written before the implementation.  Future tense for the plan. 
+We want to see what what the plan was in the issue comment.
+
 ```
 gh issue comment ISSUE_NUMBER --body "$(cat <<'EOF'
 ## Implementation Plan
 
 <contents of the plan from tasks/issue-ISSUE_NUMBER-plan.md>
+
+## Plan Modifications
+
+<quick summary to modifications to the plan that were made>
+
 EOF
 )"
+
 ```
 
+
+
 3. Push the branch and open a PR:
+
+use markdown syntax on the title to make a link to the issue
 
 ```
 git push -u origin HEAD
 ```
 
 ```
-gh pr create --title "<concise title>" --body "$(cat <<'EOF'
+gh pr create --title "<issue-ISSUE_NUMBE> <concise title>]" --body "$(cat <<'EOF'
 ## Summary
 <1-3 bullet points>
 

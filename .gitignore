@@ -1,6 +1,10 @@
 # openclaw files
 bots/
 
+# ignore generated files for sdlc
+tasks/*plan.md
+tasks/*pr.md
+
 # Dependencies
 node_modules/
 

@@ -18,12 +18,11 @@ if (process.env.AWS_REGION) {
     username: url.username,
     region: process.env.AWS_REGION,
   });
-  const token = await signer.getAuthToken();
   poolConfig = {
     host: url.hostname,
     port: parseInt(url.port || "5432"),
     user: url.username,
-    password: token,
+    password: () => signer.getAuthToken(),
     database: url.pathname.slice(1), // strip leading /
     ssl: { rejectUnauthorized: false },
   };

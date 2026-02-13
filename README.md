@@ -61,6 +61,25 @@ pnpm clean
 pnpm build:deploy
 ```
 
+## Packaging
+
+The `clawforge` CLI can be bundled and packed as a standalone npm tarball. Only the CLI is included — the API and Web packages are deployed separately via Docker.
+
+```bash
+# 1. Bundle — runs scripts/bundle.mjs, compiles TypeScript, creates bundle/
+pnpm bundle
+
+# 2. Pack — bundles + creates a .tgz tarball
+pnpm pack
+
+# 3. Install globally from the tarball
+npm install -g ./clawforge-0.0.1.tgz
+```
+
+**What's included:** the compiled CLI (`bundle/packages/cli/`), runtime dependencies (commander, nanoid, yaml), bot infrastructure files (`infra/bot/`), and hoisted `node_modules/`.
+
+**What's excluded:** API, Web, shared packages, dev dependencies, and workspace config — those are cleaned up during bundling.
+
 ## Documentation
 
 Documentation is built with [Fumadocs](https://fumadocs.vercel.app) and served at `/docs`. Content lives in the `docs/` folder at the monorepo root as MDX files.

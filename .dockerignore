@@ -5,3 +5,9 @@ dist
 .claude
 *.md
 !README.md
+bundle
+bots
+*.tgz
+packages/api/dist-lambda
+packages/web/.open-next
+packages/web/.source

@@ -44,3 +44,5 @@ packages/web/.source/
 
 # Server bundle (generated at build time)
 packages/server/bundle/
+/bundle/
+*.tgz

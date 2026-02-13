@@ -4,16 +4,13 @@
   "private": true,
   "type": "module",
   "bin": {
-    "clawforge": "./bundle/packages/cli/cli.js"
+    "clawforge": "../../bundle/packages/cli/cli.js"
   },
-  "files": [
-    "bundle"
-  ],
   "scripts": {
     "dev": "tsx watch src/cli.ts",
-    "build": "node scripts/bundle.mjs && tsc && chmod +x bundle/packages/cli/cli.js",
-    "clean": "rm -rf bundle",
-    "start": "node bundle/packages/cli/cli.js"
+    "build": "node ../../scripts/bundle.mjs && tsc && chmod +x ../../bundle/packages/cli/cli.js",
+    "clean": "rm -rf ../../bundle",
+    "start": "node ../../bundle/packages/cli/cli.js"
   },
   "dependencies": {
     "commander": "^13.0.0"

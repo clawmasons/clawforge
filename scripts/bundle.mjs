@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { cpSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -83,6 +83,28 @@ execSync("pnpm install --frozen-lockfile --prod", {
   cwd: bundleDir,
   stdio: "inherit",
 });
+
+// ── Rewrite bundle package.json for publishing ──────────────────────
+// The root package.json was copied for pnpm workspace install. Now replace it
+// with a clean publishable package.json that declares the CLI's runtime deps.
+const rootPkg = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8"));
+const serverPkg = JSON.parse(readFileSync(join(repoRoot, "packages/server/package.json"), "utf8"));
+
+writeFileSync(
+  join(bundleDir, "package.json"),
+  JSON.stringify(
+    {
+      name: rootPkg.name,
+      version: rootPkg.version,
+      type: "module",
+      bin: { clawforge: "./packages/cli/cli.js" },
+      dependencies: serverPkg.dependencies,
+      engines: rootPkg.engines,
+    },
+    null,
+    2,
+  ) + "\n",
+);
 
 // Override repo-root .dockerignore so Docker context includes node_modules/.next
 writeFileSync(join(bundleDir, ".dockerignore"), ".git\n");

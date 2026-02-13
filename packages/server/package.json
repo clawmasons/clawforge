@@ -10,10 +10,13 @@
     "dev": "tsx watch src/cli.ts",
     "build": "node ../../scripts/bundle.mjs && tsc && chmod +x ../../bundle/packages/cli/cli.js",
     "clean": "rm -rf ../../bundle",
-    "start": "node ../../bundle/packages/cli/cli.js"
+    "start": "node ../../bundle/packages/cli/cli.js",
+    "test": "node --import tsx --test test/**/*.test.ts"
   },
   "dependencies": {
-    "commander": "^13.0.0"
+    "commander": "^13.0.0",
+    "nanoid": "^5.0.0",
+    "yaml": "^2.7.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

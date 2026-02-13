@@ -41,3 +41,8 @@ packages/web/.open-next/
 
 # Fumadocs MDX generated
 packages/web/.source/
+
+# Server bundle (generated at build time)
+packages/server/bundle/
+/bundle/
+*.tgz

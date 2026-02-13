@@ -1,0 +1,23 @@
+{
+  "name": "@clawforge/server",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "clawforge": "../../bundle/packages/cli/cli.js"
+  },
+  "scripts": {
+    "dev": "tsx watch src/cli.ts",
+    "build": "node ../../scripts/bundle.mjs && tsc && chmod +x ../../bundle/packages/cli/cli.js",
+    "clean": "rm -rf ../../bundle",
+    "start": "node ../../bundle/packages/cli/cli.js"
+  },
+  "dependencies": {
+    "commander": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

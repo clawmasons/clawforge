@@ -1,0 +1,8 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "../../bundle/packages/cli",
+    "rootDir": "./src"
+  },
+  "include": ["src"]
+}

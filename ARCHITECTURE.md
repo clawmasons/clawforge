@@ -41,14 +41,17 @@ web ──(depends on)──▶ shared ──(type re-export)──▶ api
 
 Next.js 15 App Router with React 19, tRPC React Query for data fetching, and Tailwind CSS v4 for styling. Uses Better Auth's React client for session management and Google OAuth sign-in. tRPC requests include credentials for cookie-based auth.
 
-### `infra/docker/openclaw` — OpenClaw (placeholder)
+### `packages/server` — Clawforge CLI
 
-Minimal Node.js HTTP server that will be replaced with the real OpenClaw service.
+Globally-installable CLI (`clawforge` command) built with Commander.js. Used for running clawforge clawbots locally. Compose files for the org server live at `infra/clawforge-server/` and are referenced at runtime via path resolution.
 
+### `infra/bot/common` — Bot Infrastructure
+
+Docker and scripts for running OpenClaw bots locally. Includes the OpenClaw Dockerfile, a bot-specific docker-compose, and helper scripts (e.g. `extract-home.sh`).
 
 ## Local Development Infrastructure
 
-Dockerfiles live in `infra/docker/` (one per service). Docker Compose config is at `infra/compose/docker-compose.yml`.
+Org server Dockerfiles live in `infra/clawforge-server/docker/` (api, web). Docker Compose config is at `infra/clawforge-server/docker-compose.yml`. Bot infrastructure is at `infra/bot/common/`.
 
 ## Authentication Flow
 

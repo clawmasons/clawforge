@@ -1,5 +1,6 @@
 {
   "name": "clawforge",
+  "version": "0.0.1",
   "private": true,
   "scripts": {
     "dev": "pnpm --parallel --filter './packages/*' dev",
@@ -7,8 +8,16 @@
     "clean": "pnpm --filter './packages/*' clean",
     "clean:build": "pnpm clean && pnpm build",
     "lint": "pnpm --filter './packages/*' lint",
-    "build:deploy": "pnpm build && pnpm --filter @clawforge/api build:lambda"
+    "build:deploy": "pnpm build && pnpm --filter @clawforge/api build:lambda",
+    "bundle": "node scripts/bundle.mjs && pnpm --filter @clawforge/server exec tsc && chmod +x bundle/packages/cli/cli.js",
+    "pack": "pnpm bundle && pnpm pack"
   },
+  "bin": {
+    "clawforge": "./bundle/packages/cli/cli.js"
+  },
+  "files": [
+    "bundle"
+  ],
   "engines": {
     "node": ">=22"
   },

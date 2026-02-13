@@ -12,70 +12,34 @@ const bundleDir = join(repoRoot, "bundle");
 rmSync(bundleDir, { recursive: true, force: true });
 mkdirSync(bundleDir, { recursive: true });
 
-// ── Build API and Web ──────────────────────────────────────────────
-console.log("Building API...");
-execSync("pnpm --filter @clawforge/api build", {
-  cwd: repoRoot,
-  stdio: "inherit",
-});
+// ── Copy CLI dependencies ────────────────────────────────────────
 
-console.log("Building Web...");
-execSync("NEXT_PUBLIC_API_URL=http://localhost:4000 pnpm --filter @clawforge/web build:next", {
-  cwd: repoRoot,
-  stdio: "inherit",
-});
-
-// ── Copy pre-built artifacts ───────────────────────────────────────
-
-// API: compiled JS + package.json
-cpSync(join(repoRoot, "packages/api/dist"), join(bundleDir, "packages/api/dist"), {
-  recursive: true,
-});
-cpSync(
-  join(repoRoot, "packages/api/package.json"),
-  join(bundleDir, "packages/api/package.json"),
-);
-
-// Web: standalone server + static assets + package.json
-// Use cp -rL to dereference symlinks — pnpm's standalone output contains
-// absolute symlinks into .pnpm that won't resolve inside Docker.
-mkdirSync(join(bundleDir, "packages/web/.next"), { recursive: true });
-execSync(
-  `cp -rL "${join(repoRoot, "packages/web/.next/standalone")}" "${join(bundleDir, "packages/web/.next/standalone")}"`,
-  { stdio: "inherit" },
-);
-cpSync(
-  join(repoRoot, "packages/web/.next/static"),
-  join(bundleDir, "packages/web/.next/static"),
-  { recursive: true },
-);
-cpSync(
-  join(repoRoot, "packages/web/package.json"),
-  join(bundleDir, "packages/web/package.json"),
-);
-
-// Shared: package.json only (for pnpm workspace resolution)
-mkdirSync(join(bundleDir, "packages/shared"), { recursive: true });
-cpSync(
-  join(repoRoot, "packages/shared/package.json"),
-  join(bundleDir, "packages/shared/package.json"),
-);
-
-// Infra
-cpSync(
-  join(repoRoot, "infra/clawforge-server"),
-  join(bundleDir, "infra/clawforge-server"),
-  { recursive: true },
-);
+// Bot infrastructure files (needed by `clawforge bot start`)
 cpSync(join(repoRoot, "infra/bot"), join(bundleDir, "infra/bot"), {
   recursive: true,
 });
 
+// Workspace package.json stubs (needed for pnpm to resolve the lockfile)
+for (const pkg of ["api", "shared", "web", "server"]) {
+  mkdirSync(join(bundleDir, `packages/${pkg}`), { recursive: true });
+  cpSync(
+    join(repoRoot, `packages/${pkg}/package.json`),
+    join(bundleDir, `packages/${pkg}/package.json`),
+  );
+}
+
 // Root config files needed for pnpm install
-const rootFiles = ["package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", ".npmrc"];
+const rootFiles = ["package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml"];
 for (const file of rootFiles) {
   cpSync(join(repoRoot, file), join(bundleDir, file));
 }
+
+// Write .npmrc with shamefully-hoist so deps are hoisted to bundle/node_modules/
+// (the CLI at packages/cli/ needs to resolve deps via parent directory traversal)
+writeFileSync(
+  join(bundleDir, ".npmrc"),
+  "auto-install-peers=true\nstrict-peer-dependencies=false\nshamefully-hoist=true\n",
+);
 
 // ── Install production dependencies in bundle ──────────────────────
 console.log("Installing production dependencies...");
@@ -85,8 +49,6 @@ execSync("pnpm install --frozen-lockfile --prod", {
 });
 
 // ── Rewrite bundle package.json for publishing ──────────────────────
-// The root package.json was copied for pnpm workspace install. Now replace it
-// with a clean publishable package.json that declares the CLI's runtime deps.
 const rootPkg = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8"));
 const serverPkg = JSON.parse(readFileSync(join(repoRoot, "packages/server/package.json"), "utf8"));
 
@@ -106,7 +68,11 @@ writeFileSync(
   ) + "\n",
 );
 
-// Override repo-root .dockerignore so Docker context includes node_modules/.next
-writeFileSync(join(bundleDir, ".dockerignore"), ".git\n");
+// ── Clean up workspace stubs (only needed for install) ──────────────
+for (const pkg of ["api", "shared", "web", "server"]) {
+  rmSync(join(bundleDir, `packages/${pkg}`), { recursive: true, force: true });
+}
+rmSync(join(bundleDir, "pnpm-workspace.yaml"), { force: true });
+rmSync(join(bundleDir, "pnpm-lock.yaml"), { force: true });
 
 console.log("Bundle created at bundle/");

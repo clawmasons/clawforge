@@ -118,9 +118,20 @@ export function registerBotCommand(program: Command) {
           console.log(`Copied home.orig -> home`);
         }
 
-        // Setup gateway
-        // Start the gateway
+        // Write .env for docker-compose variable interpolation
         const composePath = path.join(botDir, "docker-compose.yml");
+        const envPath = path.join(botDir, ".env");
+        fs.writeFileSync(
+          envPath,
+          [
+            `CLAWFORGE_API_URL=${process.env.CLAWFORGE_API_URL ?? "http://localhost:4000"}`,
+            `CLAWFORGE_TOKEN=${process.env.CLAWFORGE_TOKEN ?? ""}`,
+            `PROGRAM_ID=${opts.program}`,
+          ].join("\n") + "\n",
+        );
+        console.log(`Wrote .env for docker-compose`);
+
+        // Setup gateway
         if (fs.existsSync(composePath)) {
           console.log(`Setting up openclaw gateway...`);
           run("docker compose  run --rm -it openclaw-gateway openclaw setup", { cwd: botDir });
@@ -130,10 +141,10 @@ export function registerBotCommand(program: Command) {
           );
         }
 
-        // Start the gateway
+        // Start the gateway and yjs-server
         if (fs.existsSync(composePath)) {
-          console.log(`Starting openclaw-gateway...`);
-          run("docker compose up -d openclaw-gateway", { cwd: botDir });
+          console.log(`Starting openclaw-gateway and yjs-server...`);
+          run("docker compose up -d openclaw-gateway yjs-server", { cwd: botDir });
         } else {
           console.log(
             `No docker-compose.yml found in bot dir — skipping container start`,

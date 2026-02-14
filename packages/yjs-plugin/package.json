@@ -1,13 +1,15 @@
 {
-  "name": "@clawforge/yjs-server",
+  "name": "@clawforge/yjs-plugin",
   "version": "0.0.1",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "clean": "rm -rf dist",
-    "test": "node --import tsx --test test/**/*.test.ts"
+    "clean": "rm -rf dist"
+  },
+  "openclaw": {
+    "extensions": ["./src/index.ts"]
   },
   "dependencies": {
     "lib0": "^0.2.99",

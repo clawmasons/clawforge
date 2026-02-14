@@ -141,6 +141,32 @@ export function registerBotCommand(program: Command) {
           );
         }
 
+        // Merge yjs-plugin config into openclaw.json
+        const openclawJsonPath = path.join(botDir, "openclaw", "openclaw.json");
+        if (fs.existsSync(openclawJsonPath)) {
+          const openclawConfig = JSON.parse(fs.readFileSync(openclawJsonPath, "utf8"));
+          openclawConfig.plugins = {
+            ...openclawConfig.plugins,
+            load: {
+              ...openclawConfig.plugins?.load,
+              paths: [
+                ...(openclawConfig.plugins?.load?.paths ?? []),
+                "/opt/yjs-plugin",
+              ],
+            },
+          };
+          openclawConfig.channels = {
+            ...openclawConfig.channels,
+            yjs: {
+              accounts: {
+                default: { enabled: true },
+              },
+            },
+          };
+          fs.writeFileSync(openclawJsonPath, JSON.stringify(openclawConfig, null, 2) + "\n");
+          console.log("Merged yjs-plugin config into openclaw.json");
+        }
+
         // Start the gateway and yjs-server
         if (fs.existsSync(composePath)) {
           console.log(`Starting openclaw-gateway and yjs-server...`);

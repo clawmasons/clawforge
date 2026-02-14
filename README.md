@@ -45,6 +45,7 @@ docker compose -f infra/clawforge-server/docker-compose.yml up --build
 | Web       | 3000 |
 | API       | 4000 |
 | PostgreSQL| 5432 |
+| Yjs Server| 1234 |
 
 ## Build
 
@@ -76,7 +77,7 @@ pnpm pack
 npm install -g ./clawforge-0.0.1.tgz
 ```
 
-**What's included:** the compiled CLI (`bundle/packages/cli/`), runtime dependencies (commander, nanoid, yaml), bot infrastructure files (`infra/bot/`), and hoisted `node_modules/`.
+**What's included:** the compiled CLI (`bundle/packages/cli/`), runtime dependencies (commander, nanoid, yaml), bot infrastructure files (`infra/bot/`), bundled yjs-server and yjs-plugin (esbuild), and hoisted `node_modules/`.
 
 **What's excluded:** API, Web, shared packages, dev dependencies, and workspace config — those are cleaned up during bundling.
 
@@ -95,9 +96,11 @@ clawforge/
 │   ├── api/             # Fastify + tRPC + Drizzle + Better Auth
 │   ├── server/          # clawforge CLI (Commander.js)
 │   ├── web/             # Next.js 15 App Router + Better Auth client
-│   └── shared/          # Shared TypeScript types
+│   ├── shared/          # Shared TypeScript types
+│   ├── yjs-server/      # Yjs WebSocket server (shared Y.Doc sync + persistence)
+│   └── yjs-plugin/      # OpenClaw channel plugin (bridges Yjs ↔ bot runtime)
 ├── infra/
-│   ├── bot/common/      # Bot docker & scripts (OpenClaw, extract-home)
+│   ├── bot/common/      # Bot docker & scripts (OpenClaw, yjs-server, skills)
 │   └── clawforge-server/# Org server docker-compose & Dockerfiles
 └── tasks/               # Task tracking
 ```
@@ -165,3 +168,8 @@ Migrations are applied by a dedicated Lambda function (`migrateHandler` in `pack
 | `GOOGLE_CLIENT_ID` | api | — | Google OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | api | — | Google OAuth client secret |
 | `WEB_URL` | api | `http://localhost:3000` | Web frontend URL (for CORS and redirects) |
+| `YJS_HOST` | yjs-plugin | — | WebSocket URL of the yjs-server (e.g. `ws://yjs-server:1234`) |
+| `YJS_TOKEN` | yjs-plugin | — | Auth token for yjs-server connection |
+| `BOT_NAME` | yjs-plugin | — | Bot identity name (used for presence key and prompt targeting) |
+| `PROGRAM_ID` | yjs-server | — | Program identifier (used in persistence filename) |
+| `WORKSPACE_DIR` | yjs-server | `/home/pn/workspace` | Directory for yjs-server persistence files |

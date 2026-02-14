@@ -13,7 +13,8 @@ It can either use clawforge.org to manage the bots, or you can run clawforge loc
 
 Dependencies:
   - Docker
-
+  - CLAWFORGE_TOKEN - log in to clawforge to fetch
+  
 Usage:
   clawforge <command> [options]
 

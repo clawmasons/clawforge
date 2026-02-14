@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import type { Program } from "@/data/programs";
 import { signIn, useSession } from "@/lib/auth-client";
+import { trpc } from "@/lib/trpc";
 
 export function ProgramCard({
   program,
@@ -14,8 +15,20 @@ export function ProgramCard({
   const { data: session } = useSession();
   const router = useRouter();
 
-  function handleLaunch() {
+  const { data: launchedPrograms } = trpc.programs.listLaunched.useQuery();
+  const { data: myMemberships } = trpc.programs.myMemberships.useQuery(
+    undefined,
+    { enabled: !!session },
+  );
+
+  const isLaunched = launchedPrograms?.includes(program.id) ?? false;
+  const myMembership = myMemberships?.find((m) => m.programId === program.id);
+  const isMember = !!myMembership;
+
+  function handleAction() {
+    const action = isLaunched ? "join" : "launch";
     localStorage.setItem("pendingLaunchProgramId", program.id);
+    localStorage.setItem("pendingAction", action);
     if (session) {
       router.push("/programs/launch");
     } else {
@@ -24,6 +37,15 @@ export function ProgramCard({
         callbackURL: `${window.location.origin}/programs/launch`,
       });
     }
+  }
+
+  let buttonLabel = program.callToAction;
+  let buttonDisabled = false;
+  if (isLaunched && isMember) {
+    buttonLabel = "Joined";
+    buttonDisabled = true;
+  } else if (isLaunched) {
+    buttonLabel = "Join";
   }
 
   return (
@@ -55,10 +77,11 @@ export function ProgramCard({
 
       <div className="mt-6 flex items-center justify-end border-t border-[var(--color-border)] pt-4">
         <button
-          onClick={handleLaunch}
-          className="rounded-full border border-[var(--color-border)] px-4 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--color-cream)]"
+          onClick={handleAction}
+          disabled={buttonDisabled}
+          className="rounded-full border border-[var(--color-border)] px-4 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--color-cream)] disabled:opacity-50 disabled:hover:bg-transparent"
         >
-          {program.callToAction}
+          {buttonLabel}
         </button>
       </div>
     </div>

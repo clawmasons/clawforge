@@ -7,22 +7,38 @@ import { useSession } from "@/lib/auth-client";
 import { trpc } from "@/lib/trpc";
 import { programs } from "@/data/programs";
 
+type PendingAction = "launch" | "join";
+
 export default function LaunchPage() {
   const { data: session, isPending: sessionLoading } = useSession();
   const router = useRouter();
   const [programId, setProgramId] = useState<string | null>(null);
+  const [action, setAction] = useState<PendingAction>("launch");
   const [mounted, setMounted] = useState(false);
 
   const launchMutation = trpc.programs.launch.useMutation({
     onSuccess: () => {
       localStorage.removeItem("pendingLaunchProgramId");
+      localStorage.removeItem("pendingAction");
     },
   });
+
+  const joinMutation = trpc.programs.join.useMutation({
+    onSuccess: () => {
+      localStorage.removeItem("pendingLaunchProgramId");
+      localStorage.removeItem("pendingAction");
+    },
+  });
+
+  const mutation = action === "join" ? joinMutation : launchMutation;
 
   useEffect(() => {
     setMounted(true);
     const id = localStorage.getItem("pendingLaunchProgramId");
+    const pendingAction =
+      (localStorage.getItem("pendingAction") as PendingAction) || "launch";
     setProgramId(id);
+    setAction(pendingAction);
   }, []);
 
   useEffect(() => {
@@ -48,16 +64,23 @@ export default function LaunchPage() {
 
   if (!session || !program) return null;
 
-  if (launchMutation.isSuccess) {
+  const isJoin = action === "join";
+  const successTitle = isJoin ? "Program Joined!" : "Program Launched!";
+  const successMessage = isJoin ? "joined" : "launched";
+  const confirmLabel = isJoin ? "Confirm Join" : "Confirm Launch";
+  const pendingLabel = isJoin ? "Joining..." : "Launching...";
+  const pageTitle = isJoin ? "Join Program" : "Launch Program";
+
+  if (mutation.isSuccess) {
     return (
       <main className="pt-24">
         <section className="mx-auto max-w-lg px-6 text-center">
           <div className="rounded-[18px] border border-[var(--color-border)] bg-[var(--color-surface)] p-8">
             <h1 className="font-[family-name:var(--font-display)] text-2xl font-bold">
-              Program Launched!
+              {successTitle}
             </h1>
             <p className="mt-3 text-[var(--color-muted)]">
-              You&apos;ve successfully launched{" "}
+              You&apos;ve successfully {successMessage}{" "}
               <strong>{program.name}</strong>.
             </p>
             <Link
@@ -77,7 +100,7 @@ export default function LaunchPage() {
       <section className="mx-auto max-w-lg px-6">
         <div className="rounded-[18px] border border-[var(--color-border)] bg-[var(--color-surface)] p-8">
           <h1 className="font-[family-name:var(--font-display)] text-2xl font-bold">
-            Launch Program
+            {pageTitle}
           </h1>
 
           <div className="mt-6 space-y-3">
@@ -99,9 +122,9 @@ export default function LaunchPage() {
             </div>
           </div>
 
-          {launchMutation.error && (
+          {mutation.error && (
             <p className="mt-4 text-sm text-red-600">
-              {launchMutation.error.message}
+              {mutation.error.message}
             </p>
           )}
 
@@ -113,11 +136,11 @@ export default function LaunchPage() {
               Cancel
             </Link>
             <button
-              onClick={() => launchMutation.mutate({ programId: program.id })}
-              disabled={launchMutation.isPending}
+              onClick={() => mutation.mutate({ programId: program.id })}
+              disabled={mutation.isPending}
               className="rounded-full bg-[var(--color-coral)] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-coral-deep)] disabled:opacity-50"
             >
-              {launchMutation.isPending ? "Launching..." : "Confirm Launch"}
+              {mutation.isPending ? pendingLabel : confirmLabel}
             </button>
           </div>
         </div>

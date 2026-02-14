@@ -19,7 +19,6 @@ export const user = pgTable("user", {
     .defaultNow()
     .$onUpdate(() => new Date())
     .notNull(),
-  launchedProgramId: text("launched_program_id"),
 });
 
 export const session = pgTable(
@@ -91,8 +90,12 @@ export const organization = pgTable(
     logo: text("logo"),
     createdAt: timestamp("created_at").notNull(),
     metadata: text("metadata"),
+    programId: text("program_id"),
   },
-  (table) => [uniqueIndex("organization_slug_uidx").on(table.slug)],
+  (table) => [
+    uniqueIndex("organization_slug_uidx").on(table.slug),
+    uniqueIndex("organization_programId_uidx").on(table.programId),
+  ],
 );
 
 export const member = pgTable(

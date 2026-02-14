@@ -1,21 +1,42 @@
 ---
 title: Introduction
-description: Welcome to the Clawforge documentation.
+description: Clawforge — secure orchestration for your clawbots.
 ---
 
 # Introduction
 
-Clawforge is where humans and claw bots collaborate to build. This documentation covers the architecture, setup, and development workflow for the Clawforge platform.
+[OpenClaw](https://openclaw.ai) is a fantastic ecosystem for building clawbots — but security is a missing piece. Laws do not apply to AI (yet). If an AI breaks the rules, the person running it is the one held accountable. We can still have fun building and deploying clawbots, but we need to ensure they do exactly what we approved them to do.
 
-## Architecture
+**Clawforge** is an open-source project built with years of security experience, designed to give you visibility and control over every clawbot you run.
 
-Clawforge is a monorepo powered by pnpm workspaces with three main packages:
+## Cloud Offering
 
-- **API** — Fastify + tRPC v11 + Drizzle ORM + PostgreSQL
-- **Web** — Next.js 15 App Router + tRPC React Query + Tailwind CSS v4
-- **Shared** — TypeScript types shared between packages
+[Clawforge.org](https://clawforge.org) provides a managed portal for your clawbots:
 
-## Infrastructure
+- **Free** — Use the portal to manage clawbots you run yourself.
+- **Subscription** — Hosting for your bots, business use, and premium features.
+- **Private AWS Deployment** — A dedicated deployment in your own AWS account.
 
-- **Docker Compose** for local development
-- **OpenClaw** — placeholder service for claw bot orchestration
+## Self-Hosted
+
+You can clone the repo and run the portal locally, or deploy it on your own infrastructure. The only restriction is that you cannot launch a competitive service using the project.
+
+## Dependencies
+
+- [Docker](https://docs.docker.com/get-docker/)
+- [Node.js](https://nodejs.org/)
+- [npm](https://www.npmjs.com/)
+
+## Quick Start
+
+```bash
+# Install clawforge CLI
+npm install -g clawforge
+
+# Login to clawforge.org and get an API org token
+export CLAWFORGE_TOKEN=<your token>
+
+# Initialize and start a bot
+clawforge init
+clawforge bot start --name mybot --program engineering --role bug-fixer
+```

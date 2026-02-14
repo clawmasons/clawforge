@@ -1,0 +1,140 @@
+---
+title: Apps
+description: Build single-page applications that communicate with clawbots over a shared CRDT document.
+---
+
+# Apps
+
+OpenClaw allows your clawbot to create single-page applications that securely sync state via Conflict-free Replicated Data Types (CRDTs) powered by Yjs. The app runs alongside your bot — both are peers on the same shared document, with no request/response API in between.
+
+Apps are scoped to a program and can be accessed by navigating to your program on [OpenClaw.ai](https://openclaw.ai).
+
+## Architecture
+
+```
+SPA (browser)              yjs-server (ws://...)           clawbot (yjs-plugin)
+─────────────              ────────────────────            ────────────────────
+Connect via WebSocket ───► Shared Y.Doc ◄──────────────── Observes Y.Doc
+Append Y.Map to            Syncs all peers                Reads new prompts
+  prompts array            Persists to disk               Writes responses back
+Observe reply-to-stream/array
+
+The SPA and the bot are both Yjs peers connected to the same document hosted
+by the yjs-server. Communication happens through two shared types on the Y.Doc:
+
+- prompts (Y.Array<Y.Map>) — the prompt queue
+- presence (Y.Map<Y.Map>) — per-entity presence tracking
+```
+
+## The yjs-app Skill
+
+Apps are built using the **yjs-app** skill, defined in the SKILL.md file. When a bot has this skill, it automatically:
+
+1. Connects to the yjs-server via WebSocket with token authentication
+2. Observes the prompts array for new messages targeting it
+3. Streams response chunks into reply-to-stream (Y.Text)
+4. Pushes the final response into reply-to-array (Y.Array)
+5. Manages its own presence (waiting / thinking / offline)
+
+## The yjs-server
+
+The yjs-server is a lightweight WebSocket server that hosts the shared Y.Doc. It:
+
+- Authenticates connections via a token query parameter
+- Syncs all peers using the Yjs sync protocol
+- Broadcasts document updates to every connected client
+- Persists document state to disk with debounced writes
+- Runs one shared document per program
+
+## The yjs-plugin
+
+The yjs-plugin is the bot-side counterpart. It:
+
+- Connects to the yjs-server with exponential backoff reconnection
+- Bridges the Yjs document to the OpenClaw messaging system
+- Filters incoming prompts by target (bot name or "*" for any bot)
+- Writes streaming chunks to reply-to-stream and final responses to reply-to-array
+- Manages bot presence — sets "thinking" while processing, "waiting" when idle, "offline" on disconnect
+
+## Prompt Schema
+
+```
+Each prompt is a Y.Map appended to the prompts array.
+The SPA creates it; the bot reads it and writes responses back.
+
+Key               Yjs Type  Set by  Description
+───               ────────  ──────  ───────────
+prompt            string    SPA     The user's message text
+target            string    SPA     Target bot name, or "*" for any bot
+reply-to-stream   Y.Text    SPA     Bot inserts streaming chunks here
+reply-to-array    Y.Array   SPA     Bot pushes the final complete response
+
+The SPA must create the reply-to-stream and reply-to-array Yjs types
+inside the Y.Map BEFORE appending it to the prompts array.
+```
+
+## Presence
+
+```
+Presence is a Map-of-Maps. The outer Y.Map is keyed by entity name
+(lowercased, snake_cased). Each inner Y.Map contains:
+
+Key          Type     Description
+───          ────     ───────────
+status       string   "waiting" / "thinking" / "offline"
+type         string   "bot" / "user"
+lastUpdate   string   ISO 8601 timestamp
+timezone     string   IANA timezone (e.g. "America/New_York")
+```
+
+## Authentication
+
+The yjs-server authenticates WebSocket connections via a token query parameter:
+
+```
+ws://yjs-server:1234?token=YOUR_TOKEN
+
+If the SPA runs inside an iframe on OpenClaw.ai, it requests connection
+info (host, token, name) from the parent frame via postMessage.
+If no parent responds, the app falls back to prompting the user directly.
+```
+
+## Example: Sending a Prompt
+
+```js
+import * as Y from 'yjs';
+import { WebsocketProvider } from 'y-websocket';
+
+const doc = new Y.Doc();
+const provider = new WebsocketProvider('ws://yjs-server:1234', 'doc', doc, {
+  params: { token: 'YOUR_TOKEN' },
+});
+
+const prompts = doc.getArray('prompts');
+
+function chat(text, target = '*') {
+  const promptMap = new Y.Map();
+  const replyStream = new Y.Text();
+  const replyArray = new Y.Array();
+
+  doc.transact(() => {
+    promptMap.set('prompt', text);
+    promptMap.set('target', target);
+    promptMap.set('reply-to-stream', replyStream);
+    promptMap.set('reply-to-array', replyArray);
+    prompts.push([promptMap]);
+  });
+
+  // Stream response as it arrives
+  replyStream.observe(() => {
+    console.log('Streaming:', replyStream.toString());
+  });
+
+  // Final response
+  replyArray.observe(() => {
+    if (replyArray.length > 0) {
+      console.log('Complete:', replyArray.get(0));
+    }
+  });
+}
+```

@@ -1,0 +1,58 @@
+---
+title: Skillsets
+description: Bundle skills, OS dependencies, and credentials into isolated, scoped containers.
+---
+
+# Skillsets
+
+A **skillset** is a self-contained bundle assigned to a role. It declares exactly what a bot or user needs — the skills it can use, the OS-level dependencies those skills require, and the credentials they consume. Everything runs in an isolated container, so a skillset can never reach beyond its declared scope.
+
+## Structure
+
+A skillset contains three sections:
+
+### Skills
+
+The list of capabilities available to the role. Each skill is a discrete unit of functionality the bot can invoke.
+
+### Dependencies
+
+OS-level packages required by the skills. ClawForge installs these into the container at build time using the appropriate package manager:
+
+- **npm** — Node.js packages
+- **pip** — Python packages
+- **apt** — System-level packages (Debian/Ubuntu)
+
+### Credentials
+
+Secrets and tokens the skillset needs at runtime. Each credential entry declares which commands require it, so ClawForge only injects secrets into the specific processes that need them — never globally.
+
+## Example
+
+```
+# calculus-solver.yaml
+
+skillset: "calculus-solver"
+
+# ── Skills ──
+skills:
+  - solve-integral
+  - solve-derivative
+  - plot-function
+
+# ── Dependencies ──
+dependencies:
+  pip:
+    - sympy
+    - matplotlib
+  apt:
+    - libcairo2-dev
+
+# ── Credentials ──
+credentials:
+  - name: WOLFRAM_API_KEY
+    description: "Wolfram Alpha API key for verification"
+    commands: [solve-integral, solve-derivative]
+```
+
+In this example, `WOLFRAM_API_KEY` is only available to the `solve-integral` and `solve-derivative` commands. The `plot-function` command cannot access it. If a skill doesn't need a credential, it never sees it.

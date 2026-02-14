@@ -1,0 +1,63 @@
+---
+title: Programs
+description: Structured deployment model for OpenClaw agents — programs, roles, and skillsets.
+---
+
+# Programs
+
+ClawForge introduces a structured deployment model for OpenClaw agents. Instead of giving a bot broad access and hoping for the best, you define a **program** — a workflow with clear stages, assigned roles, and scoped skillsets.
+
+## How It Works
+
+### Step 1: Define Program
+
+Describe the phases, channels, and objectives.
+
+### Step 2: Assign Roles
+
+Map bots, humans, or teams to each phase.
+
+### Step 3: Scope Skillsets
+
+Bundle skills and dependencies per role in isolated containers.
+
+## Example
+
+```
+# learn-calculus.yaml
+
+Program: Learn Calculus
+
+## Roles
+
+- Teacher (bot)
+  Skillsets: calculus-knowledge, calculus-solver, lesson-planner
+
+- Student (user)
+  Skillsets: learner
+
+- Program Manager (user)
+  Provides: credentials, channels
+
+## Channels
+
+- 1-on-1: Teacher ↔ each Student
+- Group: Teacher ↔ all Students
+
+## Phases
+
+1. Credential Bootstrap
+   Bots check for missing creds/channels and request them from Program Manager.
+
+2. Assessment (1-on-1)
+   Survey background → diagnostic test → personalized lesson plan.
+
+3. Weekly Classes
+   Group: lessons, examples, problem sets.
+   1-on-1: prereq help, check-ins, scaling.
+
+4. Final Test (1-on-1)
+   Personalized exam → progress report → completion summary to group.
+```
+
+Notice what's happening here: the Teacher bot gets three specific skillsets — calculus knowledge, a solver, and a lesson planner — but nothing else. It can't access student records beyond its channel. It can't modify the program structure. It can't provision its own credentials. When it needs something outside its scope, it asks the Program Manager, a human. Security is structural, not aspirational.

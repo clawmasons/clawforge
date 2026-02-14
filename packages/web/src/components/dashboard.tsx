@@ -99,9 +99,10 @@ export function Dashboard() {
           {orgPrograms.map((p) => {
             const info = catalog.find((c) => c.id === p.programId);
             return (
-              <div
+              <Link
                 key={p.id}
-                className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5"
+                href={`/programs/${p.programId}`}
+                className="block rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 transition-colors hover:border-[var(--color-coral)]"
               >
                 <h3 className="font-[family-name:var(--font-display)] text-base font-bold">
                   {info?.name ?? p.programId}
@@ -111,7 +112,7 @@ export function Dashboard() {
                     {info.description}
                   </p>
                 )}
-              </div>
+              </Link>
             );
           })}
         </div>

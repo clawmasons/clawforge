@@ -4,7 +4,9 @@ import { organization } from "better-auth/plugins";
 import { APIError } from "better-auth/api";
 import { db } from "./db/index.js";
 
-const BLOCKED_DOMAINS = new Set([
+export const ALLOW_PERSONAL_EMAIL = true;
+
+export const PERSONAL_DOMAINS = new Set([
   "gmail.com",
   "googlemail.com",
   "yahoo.com",
@@ -22,6 +24,24 @@ const BLOCKED_DOMAINS = new Set([
   "zoho.com",
   "yandex.com",
 ]);
+
+export function isPersonalEmail(email: string): boolean {
+  const domain = email.split("@")[1]?.toLowerCase();
+  return !!domain && PERSONAL_DOMAINS.has(domain);
+}
+
+export function buildOrgDetails(email: string, name: string) {
+  const domain = email.split("@")[1]?.toLowerCase();
+  if (!domain) throw new Error("Invalid email");
+
+  const personal = PERSONAL_DOMAINS.has(domain);
+  return {
+    name: personal ? `${name} Forge` : domain,
+    slug: personal
+      ? `${name.toLowerCase().replace(/\s+/g, "-")}-forge`
+      : domain.replace(/\./g, "-"),
+  };
+}
 
 export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL,
@@ -60,7 +80,10 @@ export const auth = betterAuth({
             });
           }
           const domain = email.split("@")[1]?.toLowerCase();
-          if (!domain || BLOCKED_DOMAINS.has(domain)) {
+          if (
+            !domain ||
+            (!ALLOW_PERSONAL_EMAIL && isPersonalEmail(email))
+          ) {
             throw new APIError("FORBIDDEN", {
               message:
                 "Only corporate email accounts are allowed. Consumer email providers (Gmail, Yahoo, etc.) are not supported.",
@@ -72,11 +95,13 @@ export const auth = betterAuth({
           const domain = user.email.split("@")[1]?.toLowerCase();
           if (!domain) return;
 
+          const org = buildOrgDetails(user.email, user.name);
+
           try {
             await auth.api.createOrganization({
               body: {
-                name: domain,
-                slug: domain.replace(/\./g, "-"),
+                name: org.name,
+                slug: org.slug,
                 userId: user.id,
               },
             });

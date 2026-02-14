@@ -1,11 +1,25 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/lib/trpc";
 import { programs as catalog } from "@/data/programs";
 
+const DISMISS_KEY = "clawforge-welcome-dismissed";
+
 export function Dashboard() {
+  const [bannerDismissed, setBannerDismissed] = useState(true);
+
+  useEffect(() => {
+    setBannerDismissed(localStorage.getItem(DISMISS_KEY) === "true");
+  }, []);
+
+  const dismissBanner = () => {
+    localStorage.setItem(DISMISS_KEY, "true");
+    setBannerDismissed(true);
+  };
+
   const activeOrg = authClient.useActiveOrganization();
   const orgId = activeOrg.data?.id;
 
@@ -27,6 +41,46 @@ export function Dashboard() {
 
   return (
     <section className="mx-auto max-w-3xl px-6 pt-32 pb-16">
+      {!bannerDismissed && (
+        <div className="relative mb-8 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 pr-10 text-sm leading-relaxed text-[var(--color-muted)]">
+          <button
+            onClick={dismissBanner}
+            aria-label="Dismiss welcome banner"
+            className="absolute top-3 right-3 flex h-6 w-6 items-center justify-center rounded-md text-[var(--color-muted)] transition-colors hover:text-[var(--color-coral)]"
+          >
+            &times;
+          </button>
+          <p>
+            <strong className="text-[var(--color-foreground)]">
+              Clawforge is very new
+            </strong>{" "}
+            &mdash; welcome, and thank you for being here! We&rsquo;d love your
+            feedback.
+          </p>
+          <p className="mt-2">
+            Follow{" "}
+            <a
+              href="https://x.com/clawforged"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[var(--color-coral)] underline underline-offset-2 hover:text-[var(--color-coral-deep)]"
+            >
+              @clawforged
+            </a>{" "}
+            on X for updates. Feature requests and bug reports &rarr;{" "}
+            <a
+              href="https://github.com/clawmasons/clawforge"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[var(--color-coral)] underline underline-offset-2 hover:text-[var(--color-coral-deep)]"
+            >
+              clawmasons/clawforge
+            </a>
+            .
+          </p>
+        </div>
+      )}
+
       <h1 className="mb-8 font-[family-name:var(--font-display)] text-2xl font-bold tracking-tight">
         {activeOrg.data?.name ?? "Dashboard"}
       </h1>

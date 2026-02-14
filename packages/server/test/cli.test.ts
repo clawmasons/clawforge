@@ -109,7 +109,7 @@ describe("clawforge bot start", () => {
   it("creates bot directory with workspace, openclaw, tmp subdirs", () => {
     const dir = makeTmpDir();
     const result = runCli(
-      "bot start --team t --program p --role r --name test-bot",
+      "bot start --program p --role r --name test-bot",
       dir,
     );
     assert.equal(result.exitCode, 0);
@@ -135,7 +135,7 @@ describe("clawforge bot start", () => {
 
   it("creates name symlink pointing to ID directory", () => {
     const dir = makeTmpDir();
-    runCli("bot start --team t --program p --role r --name my-bot", dir);
+    runCli("bot start --program p --role r --name my-bot", dir);
 
     const symlinkPath = path.join(dir, "bots", "my-bot");
     assert.ok(fs.existsSync(symlinkPath), "symlink should exist");
@@ -150,7 +150,7 @@ describe("clawforge bot start", () => {
   it("respects --name flag", () => {
     const dir = makeTmpDir();
     runCli(
-      "bot start --team t --program p --role r --name custom-name",
+      "bot start --program p --role r --name custom-name",
       dir,
     );
 
@@ -162,7 +162,7 @@ describe("clawforge bot start", () => {
 
   it("generates random name when --name omitted", () => {
     const dir = makeTmpDir();
-    const result = runCli("bot start --team t --program p --role r", dir);
+    const result = runCli("bot start --program p --role r", dir);
     assert.equal(result.exitCode, 0);
 
     // stdout should contain the bot name in "Name: <name>" format

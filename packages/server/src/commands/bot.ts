@@ -7,12 +7,11 @@ import { detectPlatform } from "../lib/platform.js";
 import { run, capture } from "../lib/exec.js";
 import { botInfraDir } from "../lib/paths.js";
 import {
-  getTeam,
-  getProgram,
-  getProgramRole,
-  getBotCredentials,
+  getBot,
+  createBot,
   stopBot,
 } from "../lib/api.js";
+import { writeBotConfig } from "../lib/config.js";
 
 const BOTS_DIR = "bots";
 
@@ -52,26 +51,36 @@ export function registerBotCommand(program: Command) {
   bot
     .command("start")
     .description("Start a new bot instance")
-    .requiredOption("--team <team>", "Team slug")
-    .requiredOption("--program <program>", "Program slug")
-    .requiredOption("--role <role>", "Role slug")
+    .option("--program <program>", "Program slug")
+    .option("--role <role>", "Role slug")
     .option("--name <name>", "Bot name (default: random fun name)")
     .action(
       async (opts: {
-        team: string;
-        program: string;
-        role: string;
+        program?: string;
+        role?: string;
         name?: string;
       }) => {
-        // Stub API calls
-        await getTeam(opts.team);
-        await getProgram(opts.program);
-        await getProgramRole(opts.role);
-
         const botId = nanoid(12);
         const botName = opts.name ?? generateName();
 
-        await getBotCredentials(botId);
+        // Register bot with the server (org comes from token scope)
+        let serverBot: Awaited<ReturnType<typeof getBot>> = null;
+        try {
+          serverBot = await getBot(botName);
+          if (!serverBot) {
+            serverBot = await createBot({
+              id: botId,
+              name: botName,
+              programId: opts.program,
+              role: opts.role,
+            });
+            console.log(`Registered bot on server: ${serverBot.id}`);
+          } else {
+            console.log(`Bot "${botName}" already registered (${serverBot.id})`);
+          }
+        } catch (err) {
+          console.log(`Warning: could not register bot with server (${(err as Error).message}). Continuing locally.`);
+        }
 
         // Create directory structure
         const botDir = path.join(BOTS_DIR, botId);
@@ -79,6 +88,17 @@ export function registerBotCommand(program: Command) {
           ensureDir(path.join(botDir, sub));
         }
         console.log(`Created bot directory: ${botDir}`);
+
+        // Write bot.yaml with server-returned or local info
+        writeBotConfig(botDir, {
+          id: serverBot?.id ?? botId,
+          name: serverBot?.name ?? botName,
+          organizationId: serverBot?.organizationId ?? "",
+          programId: serverBot?.currentProgramId ?? opts.program,
+          role: serverBot?.currentRole ?? opts.role,
+          status: serverBot?.status ?? "running",
+        });
+        console.log(`Wrote bot.yaml`);
 
         // Create name symlink
         const symlinkPath = path.join(BOTS_DIR, botName);
@@ -126,7 +146,7 @@ export function registerBotCommand(program: Command) {
           [
             `CLAWFORGE_API_URL=${process.env.CLAWFORGE_API_URL ?? "http://localhost:4000"}`,
             `CLAWFORGE_TOKEN=${process.env.CLAWFORGE_TOKEN ?? ""}`,
-            `PROGRAM_ID=${opts.program}`,
+            `PROGRAM_ID=${serverBot?.currentProgramId ?? opts.program ?? ""}`,
           ].join("\n") + "\n",
         );
         console.log(`Wrote .env for docker-compose`);
@@ -217,6 +237,10 @@ export function registerBotCommand(program: Command) {
       }
 
       // Notify org server
-      await stopBot(nameOrId);
+      try {
+        await stopBot(nameOrId);
+      } catch {
+        console.log(`Warning: could not notify server about bot stop.`);
+      }
     });
 }

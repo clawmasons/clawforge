@@ -7,6 +7,7 @@ import {
 import { appRouter, type AppRouter } from "./router.js";
 import { createContext } from "./trpc.js";
 import { auth } from "./auth.js";
+import { botRoutes } from "./routes/bot.js";
 
 export async function createApp() {
   const server = Fastify({ logger: true });
@@ -62,6 +63,9 @@ export async function createApp() {
       createContext: ({ req }) => createContext(req),
     } satisfies FastifyTRPCPluginOptions<AppRouter>["trpcOptions"],
   });
+
+  // Bot REST routes (token-authenticated)
+  await server.register(botRoutes);
 
   return server;
 }

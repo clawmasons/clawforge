@@ -4,7 +4,23 @@ import { randomUUID } from "crypto";
 import { TRPCError } from "@trpc/server";
 import { router, publicProcedure, protectedProcedure } from "./trpc.js";
 import { db } from "./db/index.js";
-import { organization, member, user, program } from "./db/schema.js";
+import { organization, member, user, program, orgApiToken } from "./db/schema.js";
+import { generateApiToken } from "./lib/token.js";
+
+async function verifyOrgOwner(userId: string, orgId: string) {
+  const row = await db
+    .select({ role: member.role })
+    .from(member)
+    .where(and(eq(member.organizationId, orgId), eq(member.userId, userId)))
+    .then((rows) => rows[0]);
+
+  if (!row || row.role !== "owner") {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Only organization owners can manage API tokens.",
+    });
+  }
+}
 
 export const appRouter = router({
   hello: publicProcedure
@@ -104,6 +120,105 @@ export const appRouter = router({
           .from(program)
           .where(eq(program.organizationId, input.organizationId));
       }),
+
+    tokens: router({
+      list: protectedProcedure
+        .input(z.object({ organizationId: z.string() }))
+        .query(async ({ ctx, input }) => {
+          await verifyOrgOwner(ctx.user.id, input.organizationId);
+
+          return db
+            .select({
+              id: orgApiToken.id,
+              label: orgApiToken.label,
+              tokenPrefix: orgApiToken.tokenPrefix,
+              enabled: orgApiToken.enabled,
+              createdAt: orgApiToken.createdAt,
+              lastUsedAt: orgApiToken.lastUsedAt,
+            })
+            .from(orgApiToken)
+            .where(eq(orgApiToken.organizationId, input.organizationId));
+        }),
+
+      create: protectedProcedure
+        .input(z.object({ organizationId: z.string(), label: z.string().min(1) }))
+        .mutation(async ({ ctx, input }) => {
+          await verifyOrgOwner(ctx.user.id, input.organizationId);
+
+          const { raw, hash, prefix } = generateApiToken();
+          const id = randomUUID();
+
+          await db.insert(orgApiToken).values({
+            id,
+            organizationId: input.organizationId,
+            label: input.label,
+            tokenHash: hash,
+            tokenPrefix: prefix,
+            createdBy: ctx.user.id,
+          });
+
+          return { id, label: input.label, tokenPrefix: prefix, token: raw };
+        }),
+
+      toggleEnabled: protectedProcedure
+        .input(
+          z.object({
+            organizationId: z.string(),
+            tokenId: z.string(),
+            enabled: z.boolean(),
+          }),
+        )
+        .mutation(async ({ ctx, input }) => {
+          await verifyOrgOwner(ctx.user.id, input.organizationId);
+
+          const existing = await db
+            .select({ id: orgApiToken.id })
+            .from(orgApiToken)
+            .where(
+              and(
+                eq(orgApiToken.id, input.tokenId),
+                eq(orgApiToken.organizationId, input.organizationId),
+              ),
+            )
+            .then((rows) => rows[0]);
+
+          if (!existing) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Token not found." });
+          }
+
+          await db
+            .update(orgApiToken)
+            .set({ enabled: input.enabled })
+            .where(eq(orgApiToken.id, input.tokenId));
+
+          return { ok: true };
+        }),
+
+      delete: protectedProcedure
+        .input(z.object({ organizationId: z.string(), tokenId: z.string() }))
+        .mutation(async ({ ctx, input }) => {
+          await verifyOrgOwner(ctx.user.id, input.organizationId);
+
+          const existing = await db
+            .select({ id: orgApiToken.id })
+            .from(orgApiToken)
+            .where(
+              and(
+                eq(orgApiToken.id, input.tokenId),
+                eq(orgApiToken.organizationId, input.organizationId),
+              ),
+            )
+            .then((rows) => rows[0]);
+
+          if (!existing) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Token not found." });
+          }
+
+          await db.delete(orgApiToken).where(eq(orgApiToken.id, input.tokenId));
+
+          return { ok: true };
+        }),
+    }),
   }),
 
   programs: router({

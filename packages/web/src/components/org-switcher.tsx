@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import Link from "next/link";
 import { authClient, signOut } from "@/lib/auth-client";
 import { trpc } from "@/lib/trpc";
 
@@ -14,6 +15,14 @@ export function OrgSwitcher({
 
   const { data: orgs } = trpc.organizations.myOrganizations.useQuery();
   const activeOrg = authClient.useActiveOrganization();
+  const activeSession = authClient.useSession();
+  const { data: members } = trpc.organizations.members.useQuery(
+    { organizationId: activeOrg.data?.id! },
+    { enabled: !!activeOrg.data?.id && !!activeSession.data?.user?.id },
+  );
+  const isOwner = members?.some(
+    (m) => m.userId === activeSession.data?.user?.id && m.role === "owner",
+  );
 
   // Auto-set first org as active when none is selected
   useEffect(() => {
@@ -121,6 +130,16 @@ export function OrgSwitcher({
           ))}
 
           <div className="my-1 border-t border-[var(--color-border)]" />
+
+          {isOwner && (
+            <Link
+              href="/settings/tokens"
+              onClick={() => setOpen(false)}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[var(--color-muted)] transition-colors hover:bg-[var(--color-cream)] hover:text-[var(--color-ink)]"
+            >
+              API Tokens
+            </Link>
+          )}
 
           <button
             onClick={() => signOut()}

@@ -133,6 +133,84 @@ export const program = pgTable(
   (table) => [index("program_organizationId_idx").on(table.organizationId)],
 );
 
+export const orgApiToken = pgTable(
+  "org_api_token",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    label: text("label").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    tokenPrefix: text("token_prefix").notNull(),
+    enabled: boolean("enabled").default(true).notNull(),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    lastUsedAt: timestamp("last_used_at"),
+  },
+  (table) => [
+    index("org_api_token_organizationId_idx").on(table.organizationId),
+    index("org_api_token_tokenHash_idx").on(table.tokenHash),
+  ],
+);
+
+export const bot = pgTable(
+  "bot",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    ownerId: text("owner_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    currentProgramId: text("current_program_id").references(() => program.id, {
+      onDelete: "set null",
+    }),
+    currentRole: text("current_role"),
+    status: text("status").default("running").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("bot_organizationId_idx").on(table.organizationId),
+    index("bot_ownerId_idx").on(table.ownerId),
+    uniqueIndex("bot_name_organizationId_uidx").on(
+      table.name,
+      table.organizationId,
+    ),
+  ],
+);
+
+export const programMember = pgTable(
+  "program_member",
+  {
+    id: text("id").primaryKey(),
+    programId: text("program_id")
+      .notNull()
+      .references(() => program.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    role: text("role").default("member").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("program_member_programId_idx").on(table.programId),
+    index("program_member_userId_idx").on(table.userId),
+    uniqueIndex("program_member_programId_userId_uidx").on(
+      table.programId,
+      table.userId,
+    ),
+  ],
+);
+
 export const invitation = pgTable(
   "invitation",
   {
@@ -160,6 +238,8 @@ export const userRelations = relations(user, ({ many }) => ({
   accounts: many(account),
   members: many(member),
   invitations: many(invitation),
+  bots: many(bot),
+  programMemberships: many(programMember),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -176,7 +256,7 @@ export const accountRelations = relations(account, ({ one }) => ({
   }),
 }));
 
-export const programRelations = relations(program, ({ one }) => ({
+export const programRelations = relations(program, ({ one, many }) => ({
   organization: one(organization, {
     fields: [program.organizationId],
     references: [organization.id],
@@ -185,12 +265,16 @@ export const programRelations = relations(program, ({ one }) => ({
     fields: [program.launchedBy],
     references: [user.id],
   }),
+  members: many(programMember),
+  bots: many(bot),
 }));
 
 export const organizationRelations = relations(organization, ({ many }) => ({
   members: many(member),
   invitations: many(invitation),
   programs: many(program),
+  apiTokens: many(orgApiToken),
+  bots: many(bot),
 }));
 
 export const memberRelations = relations(member, ({ one }) => ({
@@ -211,6 +295,43 @@ export const invitationRelations = relations(invitation, ({ one }) => ({
   }),
   user: one(user, {
     fields: [invitation.inviterId],
+    references: [user.id],
+  }),
+}));
+
+export const orgApiTokenRelations = relations(orgApiToken, ({ one }) => ({
+  organization: one(organization, {
+    fields: [orgApiToken.organizationId],
+    references: [organization.id],
+  }),
+  creator: one(user, {
+    fields: [orgApiToken.createdBy],
+    references: [user.id],
+  }),
+}));
+
+export const botRelations = relations(bot, ({ one }) => ({
+  organization: one(organization, {
+    fields: [bot.organizationId],
+    references: [organization.id],
+  }),
+  owner: one(user, {
+    fields: [bot.ownerId],
+    references: [user.id],
+  }),
+  currentProgram: one(program, {
+    fields: [bot.currentProgramId],
+    references: [program.id],
+  }),
+}));
+
+export const programMemberRelations = relations(programMember, ({ one }) => ({
+  program: one(program, {
+    fields: [programMember.programId],
+    references: [program.id],
+  }),
+  user: one(user, {
+    fields: [programMember.userId],
     references: [user.id],
   }),
 }));

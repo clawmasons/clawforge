@@ -51,7 +51,26 @@ services:
       - ./openclaw:/home/pn/.openclaw
       - ./workspace:/home/pn/workspace
       - ./tmp:/tmp
-    
+
+  yjs-server:
+    platform: linux/arm64
+    build:
+      context: ./docker/yjs
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:1234:1234"
+    environment:
+      - CLAWFORGE_API_URL=${CLAWFORGE_API_URL}
+      - CLAWFORGE_TOKEN=${CLAWFORGE_TOKEN}
+      - PROGRAM_ID=${PROGRAM_ID}
+      - WORKSPACE_DIR=/home/pn/workspace
+    volumes:
+      - ./workspace:/home/pn/workspace
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
 
 volumes:
   pgdata:

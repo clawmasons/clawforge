@@ -117,6 +117,22 @@ export const member = pgTable(
   ],
 );
 
+export const program = pgTable(
+  "program",
+  {
+    id: text("id").primaryKey(),
+    programId: text("program_id").notNull().unique(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    launchedBy: text("launched_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull(),
+  },
+  (table) => [index("program_organizationId_idx").on(table.organizationId)],
+);
+
 export const invitation = pgTable(
   "invitation",
   {
@@ -160,9 +176,21 @@ export const accountRelations = relations(account, ({ one }) => ({
   }),
 }));
 
+export const programRelations = relations(program, ({ one }) => ({
+  organization: one(organization, {
+    fields: [program.organizationId],
+    references: [organization.id],
+  }),
+  launcher: one(user, {
+    fields: [program.launchedBy],
+    references: [user.id],
+  }),
+}));
+
 export const organizationRelations = relations(organization, ({ many }) => ({
   members: many(member),
   invitations: many(invitation),
+  programs: many(program),
 }));
 
 export const memberRelations = relations(member, ({ one }) => ({

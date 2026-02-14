@@ -6,6 +6,8 @@ argument-hint: "<issue-number>"
 ---
 user may type in more things than issue number, find a number and assume it is ISSUE_NUMBER moving forward
 
+Write out a tasks/todo.md with the tasks in this skill and keep track if you have done all the steps.
+
 # /fix — Fix a GitHub Issue
 
 Fix a GitHub issue end-to-end: fetch details, plan the fix, implement it, verify it, and optionally open a PR.
@@ -92,6 +94,8 @@ Follow the verification strategy from the plan. At minimum:
 Update `tasks/issue-ISSUE_NUMBER-plan.md` to check off completed items.
 
 ## Phase 6: Final Verification
+
+run the '/test' skill
 
 Once all implementation steps are done, run a final round of verification:
 - Build the affected packages

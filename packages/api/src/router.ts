@@ -1,11 +1,10 @@
 import { z } from "zod";
-import { eq, and, isNotNull } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { TRPCError } from "@trpc/server";
 import { router, publicProcedure, protectedProcedure } from "./trpc.js";
 import { db } from "./db/index.js";
-import { organization, member, user } from "./db/schema.js";
-import { auth } from "./auth.js";
+import { organization, member, user, program } from "./db/schema.js";
 
 export const appRouter = router({
   hello: publicProcedure
@@ -21,6 +20,19 @@ export const appRouter = router({
   organizations: router({
     list: publicProcedure.query(async () => {
       return db.select().from(organization);
+    }),
+
+    myOrganizations: protectedProcedure.query(async ({ ctx }) => {
+      return db
+        .select({
+          id: organization.id,
+          name: organization.name,
+          slug: organization.slug,
+          logo: organization.logo,
+        })
+        .from(member)
+        .innerJoin(organization, eq(member.organizationId, organization.id))
+        .where(eq(member.userId, ctx.user.id));
     }),
 
     members: protectedProcedure
@@ -59,17 +71,57 @@ export const appRouter = router({
           .innerJoin(user, eq(member.userId, user.id))
           .where(eq(member.organizationId, input.organizationId));
       }),
+
+    programs: protectedProcedure
+      .input(z.object({ organizationId: z.string() }))
+      .query(async ({ ctx, input }) => {
+        // Verify caller is a member of the organization
+        const callerMembership = await db
+          .select()
+          .from(member)
+          .where(
+            and(
+              eq(member.organizationId, input.organizationId),
+              eq(member.userId, ctx.user.id),
+            ),
+          )
+          .then((rows) => rows[0]);
+
+        if (!callerMembership) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "You are not a member of this organization.",
+          });
+        }
+
+        return db
+          .select({
+            id: program.id,
+            programId: program.programId,
+            launchedBy: program.launchedBy,
+            createdAt: program.createdAt,
+          })
+          .from(program)
+          .where(eq(program.organizationId, input.organizationId));
+      }),
   }),
 
   programs: router({
     launch: protectedProcedure
       .input(z.object({ programId: z.string() }))
       .mutation(async ({ ctx, input }) => {
-        // Check if an org already exists for this program
+        if (!ctx.session.activeOrganizationId) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "No active organization. Please select an organization first.",
+          });
+        }
+
+        // Check if program already exists
         const existing = await db
           .select()
-          .from(organization)
-          .where(eq(organization.programId, input.programId))
+          .from(program)
+          .where(eq(program.programId, input.programId))
           .then((rows) => rows[0]);
 
         if (existing) {
@@ -79,103 +131,46 @@ export const appRouter = router({
           });
         }
 
-        // Create org via Better Auth (user becomes owner)
-        const slug = `program-${input.programId}`;
-        const org = await auth.api.createOrganization({
-          body: {
-            name: input.programId,
-            slug,
-            userId: ctx.user.id,
-          },
+        const id = randomUUID();
+        await db.insert(program).values({
+          id,
+          programId: input.programId,
+          organizationId: ctx.session.activeOrganizationId,
+          launchedBy: ctx.user.id,
+          createdAt: new Date(),
         });
 
-        if (!org) {
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Failed to create organization.",
-          });
-        }
-
-        // Set programId on the new org
-        await db
-          .update(organization)
-          .set({ programId: input.programId })
-          .where(eq(organization.id, org.id));
-
-        return { success: true, organizationId: org.id };
+        return { success: true, programId: id };
       }),
 
     join: protectedProcedure
       .input(z.object({ programId: z.string() }))
-      .mutation(async ({ ctx, input }) => {
-        // Find org for this program
-        const org = await db
-          .select()
-          .from(organization)
-          .where(eq(organization.programId, input.programId))
-          .then((rows) => rows[0]);
-
-        if (!org) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "This program has not been launched yet.",
-          });
-        }
-
-        // Check if user is already a member
-        const existingMembership = await db
-          .select()
-          .from(member)
-          .where(
-            and(
-              eq(member.organizationId, org.id),
-              eq(member.userId, ctx.user.id),
-            ),
-          )
-          .then((rows) => rows[0]);
-
-        if (existingMembership) {
-          throw new TRPCError({
-            code: "CONFLICT",
-            message: "You are already a member of this program.",
-          });
-        }
-
-        // Direct DB insert (Better Auth's addMember requires caller to be admin/owner)
-        await db.insert(member).values({
-          id: randomUUID(),
-          organizationId: org.id,
-          userId: ctx.user.id,
-          role: "member",
-          createdAt: new Date(),
+      .mutation(async () => {
+        throw new TRPCError({
+          code: "METHOD_NOT_SUPPORTED",
+          message: "Join is not yet implemented.",
         });
-
-        return { success: true, organizationId: org.id };
       }),
 
     listLaunched: publicProcedure.query(async () => {
-      const orgs = await db
-        .select({ programId: organization.programId })
-        .from(organization)
-        .where(isNotNull(organization.programId));
+      const rows = await db
+        .select({ programId: program.programId })
+        .from(program);
 
-      return orgs.map((o) => o.programId as string);
+      return rows.map((r) => r.programId);
     }),
 
     myMemberships: protectedProcedure.query(async ({ ctx }) => {
-      const memberships = await db
+      const rows = await db
         .select({
-          programId: organization.programId,
+          programId: program.programId,
           role: member.role,
         })
-        .from(member)
-        .innerJoin(organization, eq(member.organizationId, organization.id))
+        .from(program)
+        .innerJoin(member, eq(program.organizationId, member.organizationId))
         .where(eq(member.userId, ctx.user.id));
 
-      return memberships.filter((m) => m.programId !== null) as {
-        programId: string;
-        role: string;
-      }[];
+      return rows as { programId: string; role: string }[];
     }),
   }),
 });

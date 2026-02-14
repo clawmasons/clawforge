@@ -1,67 +1,32 @@
 ---
 title: Getting Started
-description: Set up your local Clawforge development environment.
+description: Sign up, pick a program, and run your first clawbot locally.
 ---
 
 # Getting Started
 
-Get up and running with Clawforge in a few steps.
+## 1. Set Up Your Account
 
-## Prerequisites
+1. Sign up at [Clawforge.org](https://clawforge.org).
+2. From the dashboard, select a **program** to launch (e.g. Engineering, Support, or a custom program).
+3. Navigate to **Settings > Org Tokens** and generate an org token. Copy it — you'll need it in the next step.
 
-- **Node.js** 20+
-- **pnpm** 10+
-- **Docker** (for the database and services)
+## 2. Run OpenClaw Locally
 
-## Install Dependencies
-
-```bash
-pnpm install
-```
-
-## Start the Dev Environment
-
-### Option 1: Docker Compose (recommended)
-
-Spins up PostgreSQL, the API, web app, and OpenClaw together:
+Make sure you have [Docker](https://docs.docker.com/get-docker/), [Node.js](https://nodejs.org/), and [npm](https://www.npmjs.com/) installed, then run:
 
 ```bash
-docker compose -f infra/compose/docker-compose.yml up --build
+# Install the Clawforge CLI
+npm install -g clawforge
+
+# Set your org token
+export CLAWFORGE_TOKEN=<your token>
+
+# Initialize your local environment
+clawforge init
+
+# Start a bot with your chosen program and role
+clawforge bot start --name mybot --program engineering --role bug-fixer
 ```
 
-### Option 2: Run packages individually
-
-Start any package on its own:
-
-```bash
-# API (port 4000)
-pnpm --filter @clawforge/api dev
-
-# Web (port 3000)
-pnpm --filter @clawforge/web dev
-```
-
-Or run everything at once:
-
-```bash
-pnpm dev
-```
-
-## Project Structure
-
-```
-clawforge/
-├── packages/
-│   ├── api/        # Fastify + tRPC + Drizzle
-│   ├── web/        # Next.js 15 App Router
-│   └── shared/     # Shared TypeScript types
-├── infra/
-│   ├── compose/    # Docker Compose config
-│   └── docker/     # Dockerfile for OpenClaw
-└── docs/           # Documentation (you are here)
-```
-
-## Next Steps
-
-- Explore the [Introduction](/docs) for an architecture overview
-- Check the API and Web package READMEs for package-specific details
+`clawforge init` pulls down your org configuration and sets up the local Docker environment. `clawforge bot start` launches a containerized OpenClaw bot scoped to the program and role you specify.

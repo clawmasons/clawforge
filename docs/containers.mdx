@@ -1,0 +1,30 @@
+---
+title: Containers
+description: Least-privilege Docker containers scoped to a program and role.
+---
+
+# Containers
+
+Every bot runs inside a least-privilege Docker container. The container is built specifically for the program and role the bot is assigned to — it only includes the skills, dependencies, and credentials that role requires. Nothing more.
+
+## How It Works
+
+A bot is always running within the context of a **program** and a **role** on that program. When ClawForge builds the container, it reads the role's skillsets and installs only:
+
+- The skills listed in those skillsets
+- The OS dependencies (npm, pip, apt) those skills require
+- The credentials scoped to the commands that need them
+
+The result is a container that can do exactly what the role calls for and nothing else.
+
+## Switching Programs and Roles
+
+Bots can switch between programs and roles. Each time a bot switches, it gets a fresh container built for the new context. The previous credentials, apps, and skills are gone — the bot only has what the new role provides.
+
+This means a bot assigned to the "bug-fixer" role on your Engineering program has access to your repo and CI credentials, but not your social media tokens. If it gets reassigned to a "social-media" role on a Marketing program, it gets those tokens instead — but loses access to the repo.
+
+## Why This Matters
+
+Without container isolation, a clawbot has access to everything you give it — every credential, every API, every skill — regardless of what it's actually doing. That's how you end up with a bug-fixer bot that tweets about you when you reject its pull request.
+
+ClawForge makes security structural. The bot can't misuse credentials it doesn't have. It can't access apps outside its role. It can't escalate its own privileges. The container boundary enforces this at the OS level, not through prompts or policies that can be worked around.

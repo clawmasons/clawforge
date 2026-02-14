@@ -235,7 +235,29 @@ export function Hero() {
           >
             View on GitHub
           </a>
+          <a
+            href="https://x.com/clawforged"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-full border border-[var(--color-border)] px-7 py-3 text-sm font-semibold transition-colors hover:bg-[var(--color-surface)]"
+          >
+            Follow @clawforged
+          </a>
         </div>
+
+        <p className="mx-auto mt-8 max-w-lg text-xs leading-relaxed text-[var(--color-muted)]">
+          Clawforge is currently in beta and makes no guarantees of availability
+          or security at this point. Use at your own risk. Follow us on{" "}
+          <a
+            href="https://x.com/clawforged"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-[var(--color-foreground)]"
+          >
+            x.com
+          </a>
+          .
+        </p>
       </div>
     </section>
   );

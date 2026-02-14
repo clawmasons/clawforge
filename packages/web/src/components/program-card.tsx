@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type { Program } from "@/data/programs";
 import { signIn, useSession } from "@/lib/auth-client";
 import { trpc } from "@/lib/trpc";
@@ -68,7 +69,16 @@ export function ProgramCard({
       </div>
 
       <h3 className="font-[family-name:var(--font-display)] text-lg font-bold leading-snug">
-        {program.name}
+        {isLaunched ? (
+          <Link
+            href={`/programs/${program.id}`}
+            className="transition-colors hover:text-[var(--color-coral)]"
+          >
+            {program.name}
+          </Link>
+        ) : (
+          program.name
+        )}
       </h3>
 
       <p className="mt-2 flex-1 text-sm leading-relaxed text-[var(--color-muted)]">

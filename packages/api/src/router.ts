@@ -4,7 +4,7 @@ import { randomUUID } from "crypto";
 import { TRPCError } from "@trpc/server";
 import { router, publicProcedure, protectedProcedure } from "./trpc.js";
 import { db } from "./db/index.js";
-import { organization, member, user, program, orgApiToken } from "./db/schema.js";
+import { organization, member, user, program, orgApiToken, bot } from "./db/schema.js";
 import { generateApiToken } from "./lib/token.js";
 
 async function verifyOrgOwner(userId: string, orgId: string) {
@@ -287,6 +287,91 @@ export const appRouter = router({
 
       return rows as { programId: string; role: string }[];
     }),
+
+    details: protectedProcedure
+      .input(z.object({ programId: z.string() }))
+      .query(async ({ ctx, input }) => {
+        // Look up program by slug
+        const prog = await db
+          .select()
+          .from(program)
+          .where(eq(program.programId, input.programId))
+          .then((rows) => rows[0]);
+
+        if (!prog) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Program not found.",
+          });
+        }
+
+        // Verify caller is a member of the program's org
+        const callerMembership = await db
+          .select()
+          .from(member)
+          .where(
+            and(
+              eq(member.organizationId, prog.organizationId),
+              eq(member.userId, ctx.user.id),
+            ),
+          )
+          .then((rows) => rows[0]);
+
+        if (!callerMembership) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "You are not a member of this organization.",
+          });
+        }
+
+        // Get launcher info
+        const launcher = await db
+          .select({
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            image: user.image,
+          })
+          .from(user)
+          .where(eq(user.id, prog.launchedBy))
+          .then((rows) => rows[0]);
+
+        // Get bots currently in this program
+        const bots = await db
+          .select({
+            id: bot.id,
+            name: bot.name,
+            currentRole: bot.currentRole,
+            status: bot.status,
+            ownerId: user.id,
+            ownerName: user.name,
+            ownerEmail: user.email,
+            ownerImage: user.image,
+          })
+          .from(bot)
+          .innerJoin(user, eq(bot.ownerId, user.id))
+          .where(eq(bot.currentProgramId, prog.id));
+
+        return {
+          id: prog.id,
+          programId: prog.programId,
+          organizationId: prog.organizationId,
+          launchedBy: launcher!,
+          createdAt: prog.createdAt,
+          bots: bots.map((b) => ({
+            id: b.id,
+            name: b.name,
+            currentRole: b.currentRole,
+            status: b.status,
+            owner: {
+              id: b.ownerId,
+              name: b.ownerName,
+              email: b.ownerEmail,
+              image: b.ownerImage,
+            },
+          })),
+        };
+      }),
   }),
 });
 

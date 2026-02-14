@@ -12,6 +12,7 @@
     "build:lambda": "node esbuild.lambda.mjs",
     "clean": "rm -rf dist",
     "start": "node dist/server.js",
+    "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push"
@@ -34,6 +35,7 @@
     "drizzle-kit": "^0.31.9",
     "esbuild": "^0.25.0",
     "tsx": "^4.19.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^4.0.18"
   }
 }

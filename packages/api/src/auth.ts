@@ -42,16 +42,6 @@ export const auth = betterAuth({
 
   plugins: [organization()],
 
-  user: {
-    additionalFields: {
-      launchedProgramId: {
-        type: "string",
-        required: false,
-        input: false,
-      },
-    },
-  },
-
   session: {
     cookieCache: {
       enabled: true,

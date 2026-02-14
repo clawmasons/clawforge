@@ -34,6 +34,23 @@ await build({
   },
 });
 
+// ── Bundle yjs-plugin into infra dir (before copying infra/bot) ──────
+console.log("Bundling yjs-plugin with esbuild...");
+await build({
+  entryPoints: [join(repoRoot, "packages/yjs-plugin/src/index.ts")],
+  outfile: join(repoRoot, "infra/bot/common/docker/openclaw/yjs-plugin.js"),
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  target: "node22",
+  banner: {
+    js: [
+      'import { createRequire as __bundleCreateRequire } from "node:module";',
+      "const require = __bundleCreateRequire(import.meta.url);",
+    ].join("\n"),
+  },
+});
+
 // ── Copy bot infrastructure files (needed by `clawforge bot start`) ──
 cpSync(join(repoRoot, "infra/bot"), join(bundleDir, "infra/bot"), {
   recursive: true,

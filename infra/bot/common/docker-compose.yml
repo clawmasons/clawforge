@@ -13,6 +13,7 @@ x-openclaw-common: &openclaw-common
 
     environment:
       - CODEX_HOME=/home/pn/workspace/.codex
+      - YJS_HOST=ws://yjs-server:1234
 
     # Security hardening
     read_only: true

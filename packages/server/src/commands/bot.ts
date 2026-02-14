@@ -89,6 +89,8 @@ export function registerBotCommand(program: Command) {
 
         // Copy common infra files
         const commonDir = path.join(botInfraDir, "common");
+        console.log(commonDir);
+        console.log(botDir)
         copyDirRecursive(commonDir, botDir);
         console.log(`Copied common infra files`);
 
@@ -101,7 +103,7 @@ export function registerBotCommand(program: Command) {
         }
 
         // chmod +x and run extract-home.sh if it exists
-        const extractScript = path.join(botDir, "scripts", "extract-home.sh");
+        const extractScript = path.join("./", "scripts", "extract-home.sh");
         if (fs.existsSync(extractScript)) {
           run(`chmod +x "${extractScript}"`);
           run(`"${extractScript}"`, { cwd: botDir });
@@ -116,8 +118,19 @@ export function registerBotCommand(program: Command) {
           console.log(`Copied home.orig -> home`);
         }
 
+        // Setup gateway
         // Start the gateway
         const composePath = path.join(botDir, "docker-compose.yml");
+        if (fs.existsSync(composePath)) {
+          console.log(`Setting up openclaw gateway...`);
+          run("docker compose  run --rm -it openclaw-gateway openclaw setup", { cwd: botDir });
+        } else {
+          console.log(
+            `No docker-compose.yml found in bot dir — skipping container start`,
+          );
+        }
+
+        // Start the gateway
         if (fs.existsSync(composePath)) {
           console.log(`Starting openclaw-gateway...`);
           run("docker compose up -d openclaw-gateway", { cwd: botDir });

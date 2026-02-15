@@ -1,3 +1,4 @@
+import type { MDXComponents } from "mdx/types";
 import type { FC } from "react";
 import type { TableOfContents } from "fumadocs-core/server";
 import { source } from "@/lib/source";
@@ -12,7 +13,7 @@ export default async function Page(props: {
   const page = source.getPage(params.slug);
   if (!page) notFound();
 
-  const { body: MDX, toc } = page.data as { body: FC; toc: TableOfContents };
+  const { body: MDX, toc } = page.data as { body: FC<{ components?: MDXComponents }>; toc: TableOfContents };
 
   return (
     <DocsPage toc={toc}>

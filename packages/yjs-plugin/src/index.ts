@@ -1,6 +1,8 @@
+import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 import * as Y from "yjs";
 import { YjsClient } from "./yjs-client.js";
 import { createYjsChannel } from "./channel.js";
+import { YjsConfigSchema, type YjsConfig } from "./config-schema.js";
 import type { YjsPluginConfig } from "./types.js";
 
 /** Lowercase and replace non-alphanumeric runs with `_`, trim edges. */
@@ -11,60 +13,93 @@ function toSnakeCase(name: string): string {
     .replace(/^_|_$/g, "");
 }
 
-export default function register(api: any): void {
-  const host = process.env.YJS_HOST;
-  if (!host) {
-    console.log("[yjs-plugin] YJS_HOST not set — plugin disabled");
-    return;
-  }
+const yjsPlugin = {
+  id: "yjs",
+  name: "YJS",
+  description: "Yjs collaborative channel plugin",
 
-  const botName = process.env.BOT_NAME;
-  if (!botName) {
-    console.log("[yjs-plugin] BOT_NAME not set — plugin disabled");
-    return;
-  }
+  register(api: OpenClawPluginApi): void {
+    // Parse and validate configuration
+    let config: YjsConfig;
+    try {
+      config = YjsConfigSchema.parse(api.pluginConfig);
+    } catch (err) {
+      api.logger.error(`[yjs] Invalid configuration: ${err instanceof Error ? err.message : String(err)}`);
+      return;
+    }
 
-  const config: YjsPluginConfig = {
-    host,
-    token: process.env.YJS_TOKEN,
-    botName,
-  };
+    if (!config.enabled) {
+      api.logger.info("[yjs] Plugin disabled in configuration");
+      return;
+    }
 
-  const client = new YjsClient(config);
-  const channel = createYjsChannel(client, config.botName);
-  const presenceKey = toSnakeCase(botName);
+    if (!config.host) {
+      api.logger.warn("[yjs] host not configured — plugin disabled");
+      return;
+    }
 
-  api.registerChannel({ plugin: channel });
+    if (!config.botName) {
+      api.logger.warn("[yjs] botName not configured — plugin disabled");
+      return;
+    }
 
-  api.registerService({
-    start: async () => {
-      client.start();
-      await client.synced;
+    const clientConfig: YjsPluginConfig = {
+      host: config.host,
+      token: config.token,
+      botName: config.botName,
+    };
 
-      // Set initial presence after sync
-      const presence: Y.Map<Y.Map<string>> = client.doc.getMap("presence");
-      const inner = new Y.Map<string>();
-      inner.set("status", "waiting");
-      inner.set("type", "bot");
-      inner.set("lastUpdate", new Date().toISOString());
-      inner.set("timezone", Intl.DateTimeFormat().resolvedOptions().timeZone);
-      presence.set(presenceKey, inner);
+    const client = new YjsClient(clientConfig);
+    const channel = createYjsChannel(client, config.botName, api.logger);
+    const presenceKey = toSnakeCase(config.botName);
 
-      console.log("[yjs-plugin] Service started and synced");
-    },
-    stop: async () => {
-      // Set offline presence before disconnecting
-      const presence: Y.Map<Y.Map<string>> = client.doc.getMap("presence");
-      const inner = presence.get(presenceKey);
-      if (inner) {
-        inner.set("status", "offline");
-        inner.set("lastUpdate", new Date().toISOString());
-      }
+    api.registerChannel({ plugin: channel });
 
-      client.stop();
-      console.log("[yjs-plugin] Service stopped");
-    },
-  });
+    api.registerService({
+      id: "yjs",
+      start: async () => {
+        try {
+          client.start();
+          await client.synced;
 
-  console.log("[yjs-plugin] Registered channel and service");
-}
+          // Set initial presence after sync
+          const presence: Y.Map<Y.Map<string>> = client.doc.getMap("presence");
+          const inner = new Y.Map<string>();
+          inner.set("status", "waiting");
+          inner.set("type", "bot");
+          inner.set("lastUpdate", new Date().toISOString());
+          inner.set("timezone", Intl.DateTimeFormat().resolvedOptions().timeZone);
+          presence.set(presenceKey, inner);
+
+          // Start observing prompts array AFTER sync
+          channel.startObserving(api);
+
+          api.logger.info("[yjs] Service started and synced, observing prompts array");
+        } catch (err) {
+          api.logger.error(`[yjs] Failed to start service: ${err instanceof Error ? err.message : String(err)}`);
+          throw err;
+        }
+      },
+      stop: async () => {
+        try {
+          // Set offline presence before disconnecting
+          const presence: Y.Map<Y.Map<string>> = client.doc.getMap("presence");
+          const inner = presence.get(presenceKey);
+          if (inner) {
+            inner.set("status", "offline");
+            inner.set("lastUpdate", new Date().toISOString());
+          }
+
+          client.stop();
+          api.logger.info("[yjs] Service stopped");
+        } catch (err) {
+          api.logger.error(`[yjs] Error during service stop: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      },
+    });
+
+    api.logger.info("[yjs] Registered channel and service");
+  },
+};
+
+export default yjsPlugin;

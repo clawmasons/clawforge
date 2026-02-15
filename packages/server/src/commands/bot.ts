@@ -160,6 +160,8 @@ export function registerBotCommand(program: Command) {
             `No docker-compose.yml found in bot dir — skipping container start`,
           );
         }
+        // todo: call this
+        // openclaw config set gateway.controlUi.allowInsecureAuth true
 
         // Merge yjs-plugin config into openclaw.json
         const openclawJsonPath = path.join(botDir, "openclaw", "openclaw.json");

@@ -33,7 +33,7 @@ export function Header() {
           Clawforge
         </Link>
 
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-3 sm:gap-6">
           <Link
             href="/overview"
             className="text-sm font-medium text-[var(--color-muted)] transition-colors hover:text-[var(--color-ink)]"

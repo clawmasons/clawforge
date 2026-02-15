@@ -1,0 +1,41 @@
+{
+  "id": "yjs",
+  "channels": ["yjs"],
+  "description": "Yjs collaborative communication channel",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["host", "botName"],
+    "properties": {
+      "enabled": {
+        "type": "boolean"
+      },
+      "host": {
+        "type": "string"
+      },
+      "token": {
+        "type": "string"
+      },
+      "botName": {
+        "type": "string"
+      }
+    }
+  },
+  "uiHints": {
+    "enabled": {
+      "label": "Enabled"
+    },
+    "host": {
+      "label": "YJS Server URL",
+      "placeholder": "ws://localhost:1234"
+    },
+    "token": {
+      "label": "Authentication Token",
+      "sensitive": true
+    },
+    "botName": {
+      "label": "Bot Name",
+      "placeholder": "openclaw-bot"
+    }
+  }
+}

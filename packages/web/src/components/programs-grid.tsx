@@ -27,27 +27,19 @@ export function ProgramsGrid({
     return sorted;
   }, [programs]);
 
-  const matchingTags = useMemo(() => {
-    if (!search.trim()) return [] as string[];
-    const q = search.toLowerCase();
-    return allTags.filter((t) => t.toLowerCase().includes(q));
-  }, [search, allTags]);
-
-  const activeTags = selectedTags.length > 0 ? selectedTags : matchingTags;
-
   const filtered = useMemo(() => {
     if (!filterable) return programs;
 
     let results = programs;
 
-    if (activeTags.length > 0) {
+    if (selectedTags.length > 0) {
       results = results.filter((p) =>
-        p.tags.some((t) => activeTags.includes(t)),
+        p.tags.some((t) => selectedTags.includes(t)),
       );
     }
 
     const q = search.trim().toLowerCase();
-    if (q && activeTags.length === 0) {
+    if (q) {
       results = results.filter(
         (p) =>
           p.name.toLowerCase().includes(q) ||
@@ -57,7 +49,7 @@ export function ProgramsGrid({
     }
 
     return results;
-  }, [programs, activeTags, filterable, search]);
+  }, [programs, selectedTags, filterable, search]);
 
   function toggleTag(tag: string) {
     setSelectedTags((prev) =>
@@ -91,9 +83,7 @@ export function ProgramsGrid({
                 className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                   selectedTags.includes(tag)
                     ? "bg-[var(--color-fg)] text-[var(--color-bg)]"
-                    : matchingTags.includes(tag)
-                      ? "bg-[var(--color-fg)] text-[var(--color-bg)]"
-                      : "bg-[var(--color-cream)] text-[var(--color-muted)] hover:bg-[var(--color-border)]"
+                    : "bg-[var(--color-cream)] text-[var(--color-muted)] hover:bg-[var(--color-border)]"
                 }`}
               >
                 {tag}
@@ -108,14 +98,14 @@ export function ProgramsGrid({
           <ProgramCard
             key={program.id}
             program={program}
-            activeTags={filterable ? activeTags : []}
+            activeTags={filterable ? selectedTags : []}
           />
         ))}
       </div>
 
       {filterable && filtered.length === 0 && (
         <p className="py-12 text-center text-sm text-[var(--color-muted)]">
-          No programs match the selected tags.
+          No programs found.
         </p>
       )}
     </section>

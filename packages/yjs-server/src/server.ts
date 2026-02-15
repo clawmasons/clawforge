@@ -9,7 +9,7 @@ import { setupYjsConnection } from "./sync.js";
 const CLAWFORGE_API_URL = process.env.CLAWFORGE_API_URL ?? "http://localhost:4000";
 const CLAWFORGE_TOKEN = process.env.CLAWFORGE_TOKEN ?? "";
 const PROGRAM_ID = process.env.PROGRAM_ID ?? "default";
-const WORKSPACE_DIR = process.env.WORKSPACE_DIR ?? "/home/pn/workspace";
+const DATA_DIR = process.env.DATA_DIR ?? "/home/pn/data";
 const PORT = parseInt(process.env.PORT ?? "1234", 10);
 
 // Single shared document

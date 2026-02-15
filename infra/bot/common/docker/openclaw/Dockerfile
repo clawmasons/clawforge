@@ -26,7 +26,6 @@ RUN mkdir -p /home/node/.openclaw /home/node/workspace /tmp \
 
 # Install yjs-plugin for openclaw channel integration
 COPY yjs-plugin.js /opt/yjs-plugin/index.js
-RUN echo '{"name":"@clawforge/yjs-plugin","version":"0.0.1","type":"module","main":"index.js","openclaw":{"extensions":["./index.js"],"slots":["channel"]}}' > /opt/yjs-plugin/package.json
 
 USER pn
 WORKDIR /home/pn

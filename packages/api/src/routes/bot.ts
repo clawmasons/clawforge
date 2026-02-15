@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { eq, and, or } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { db } from "../db/index.js";
-import { bot } from "../db/schema.js";
+import { bot, program } from "../db/schema.js";
 import { tokenAuthHook } from "../middleware/token-auth.js";
 
 export async function botRoutes(app: FastifyInstance) {
@@ -62,12 +62,34 @@ export async function botRoutes(app: FastifyInstance) {
         .send({ error: `Bot with name "${name}" already exists in this org` });
     }
 
+    // Resolve program slug to UUID
+    let resolvedProgramId: string | null = null;
+    if (programId) {
+      const prog = await db
+        .select({ id: program.id })
+        .from(program)
+        .where(
+          and(
+            eq(program.organizationId, orgId),
+            or(eq(program.id, programId), eq(program.programId, programId)),
+          ),
+        )
+        .then((rows) => rows[0]);
+
+      if (!prog) {
+        return reply
+          .status(404)
+          .send({ error: `Program "${programId}" not found` });
+      }
+      resolvedProgramId = prog.id;
+    }
+
     const row = {
       id,
       name,
       organizationId: orgId,
       ownerId: resolvedOwnerId,
-      currentProgramId: programId ?? null,
+      currentProgramId: resolvedProgramId,
       currentRole: role ?? null,
       status: "running",
       createdAt: new Date(),
@@ -108,8 +130,32 @@ export async function botRoutes(app: FastifyInstance) {
 
     const updates: Record<string, unknown> = {};
     if (request.body.name != null) updates.name = request.body.name;
-    if (request.body.programId !== undefined)
-      updates.currentProgramId = request.body.programId;
+    if (request.body.programId !== undefined) {
+      if (request.body.programId === null) {
+        updates.currentProgramId = null;
+      } else {
+        const prog = await db
+          .select({ id: program.id })
+          .from(program)
+          .where(
+            and(
+              eq(program.organizationId, orgId),
+              or(
+                eq(program.id, request.body.programId),
+                eq(program.programId, request.body.programId),
+              ),
+            ),
+          )
+          .then((rows) => rows[0]);
+
+        if (!prog) {
+          return reply
+            .status(404)
+            .send({ error: `Program "${request.body.programId}" not found` });
+        }
+        updates.currentProgramId = prog.id;
+      }
+    }
     if (request.body.role !== undefined)
       updates.currentRole = request.body.role;
     if (request.body.status != null) updates.status = request.body.status;

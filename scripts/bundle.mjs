@@ -43,6 +43,7 @@ await build({
   platform: "node",
   format: "esm",
   target: "node22",
+  external: ["openclaw/plugin-sdk"],
   banner: {
     js: [
       'import { createRequire as __bundleCreateRequire } from "node:module";',

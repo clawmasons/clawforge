@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 const slides = [
@@ -42,63 +42,6 @@ const slides = [
         </blockquote>
         <p className="mt-10 text-lg text-[var(--color-muted)]">
           Built by security engineers. Open source. Self-hostable.
-        </p>
-      </>
-    ),
-  },
-  {
-    title: "Programs",
-    subtitle: "Structured Deployments",
-    content: (
-      <>
-        <p className="text-xl leading-relaxed text-[var(--color-muted)] max-w-2xl">
-          No more &ldquo;give the bot access to everything.&rdquo; A{" "}
-          <strong className="text-[var(--color-ink)]">program</strong> defines
-          the workflow: phases, roles, channels, and objectives.
-        </p>
-        <pre className="mt-8 rounded-xl bg-[var(--color-surface)] p-6 font-[family-name:var(--font-mono)] text-sm leading-relaxed text-[var(--color-ink)] overflow-x-auto">
-{`Program: Learn Calculus
-
-Roles:
-  Teacher (bot)  → calculus-knowledge, solver, lesson-planner
-  Student (user) → learner
-
-Phases:
-  1. Credential Bootstrap
-  2. Assessment (1-on-1)
-  3. Weekly Classes
-  4. Final Test`}
-        </pre>
-        <p className="mt-6 text-lg font-semibold text-[var(--color-coral)]">
-          Security is structural, not aspirational.
-        </p>
-      </>
-    ),
-  },
-  {
-    title: "Skillsets",
-    subtitle: "Least-Privilege Containers",
-    content: (
-      <>
-        <p className="text-xl leading-relaxed text-[var(--color-muted)] max-w-2xl">
-          Each role gets a <strong className="text-[var(--color-ink)]">skillset</strong>: a
-          locked-down bundle of skills, dependencies, and credentials running in
-          an isolated container.
-        </p>
-        <pre className="mt-8 rounded-xl bg-[var(--color-surface)] p-6 font-[family-name:var(--font-mono)] text-sm leading-relaxed text-[var(--color-ink)] overflow-x-auto">
-{`skillset: calculus-solver
-skills:
-  - solve-integral
-  - solve-derivative
-  - plot-function
-credentials:
-  - name: WOLFRAM_API_KEY
-    commands: [solve-integral, solve-derivative]
-    # plot-function never sees this key`}
-        </pre>
-        <p className="mt-6 text-lg text-[var(--color-muted)] max-w-2xl">
-          Credentials are injected per-command. No global env vars. No lateral
-          movement.
         </p>
       </>
     ),
@@ -146,6 +89,63 @@ credentials:
             </p>
           </div>
         </div>
+      </>
+    ),
+  },
+  {
+    title: "Skillsets",
+    subtitle: "Least-Privilege Containers",
+    content: (
+      <>
+        <p className="text-xl leading-relaxed text-[var(--color-muted)] max-w-2xl">
+          Each role gets a <strong className="text-[var(--color-ink)]">skillset</strong>: a
+          locked-down bundle of skills, dependencies, and credentials running in
+          an isolated container.
+        </p>
+        <pre className="mt-8 rounded-xl bg-[var(--color-surface)] p-6 font-[family-name:var(--font-mono)] text-sm leading-relaxed text-[var(--color-ink)] overflow-x-auto">
+{`skillset: calculus-solver
+skills:
+  - solve-integral
+  - solve-derivative
+  - plot-function
+dependencies:
+  npm: mathjs
+credentials:
+  - name: WOLFRAM_API_KEY`}
+        </pre>
+        <p className="mt-6 text-lg text-[var(--color-muted)] max-w-2xl">
+          Credentials are injected per-command. No global env vars. No lateral
+          movement.
+        </p>
+      </>
+    ),
+  },
+  {
+    title: "Programs",
+    subtitle: "Structured Deployments",
+    content: (
+      <>
+        <p className="text-xl leading-relaxed text-[var(--color-muted)] max-w-2xl">
+          No more &ldquo;give the bot access to everything.&rdquo; A{" "}
+          <strong className="text-[var(--color-ink)]">program</strong> defines
+          the workflow: phases, roles, channels, and objectives.
+        </p>
+        <pre className="mt-8 rounded-xl bg-[var(--color-surface)] p-6 font-[family-name:var(--font-mono)] text-sm leading-relaxed text-[var(--color-ink)] overflow-x-auto">
+{`Program: Learn Calculus
+
+Roles:
+  Teacher (bot)  → calculus-knowledge, solver, lesson-planner
+  Student (user) → learner
+
+Phases:
+  1. Credential Bootstrap
+  2. Assessment (1-on-1)
+  3. Weekly Classes
+  4. Final Test`}
+        </pre>
+        <p className="mt-6 text-lg font-semibold text-[var(--color-coral)]">
+          Security is structural, not aspirational.
+        </p>
       </>
     ),
   },
@@ -324,6 +324,7 @@ export default function OverviewPage() {
   const [current, setCurrent] = useState(0);
   const [direction, setDirection] = useState<"left" | "right">("right");
   const [animating, setAnimating] = useState(false);
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
 
   const go = useCallback(
     (next: number) => {
@@ -355,6 +356,25 @@ export default function OverviewPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [current, go, router]);
 
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }, []);
+
+  const onTouchEnd = useCallback(
+    (e: React.TouchEvent) => {
+      if (!touchStart.current) return;
+      const dx = e.changedTouches[0].clientX - touchStart.current.x;
+      const dy = e.changedTouches[0].clientY - touchStart.current.y;
+      touchStart.current = null;
+      // Only trigger if horizontal swipe is dominant and exceeds threshold
+      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+        if (dx < 0) go(current + 1);
+        else go(current - 1);
+      }
+    },
+    [current, go],
+  );
+
   const slide = slides[current];
 
   const animationName = animating
@@ -369,12 +389,14 @@ export default function OverviewPage() {
     <div
       className="fixed inset-0 z-40 flex flex-col bg-[var(--color-cream)]"
       onClick={() => go(current + 1)}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
     >
       {/* Slide content */}
-      <div className="flex flex-1 items-center justify-center overflow-hidden px-8">
+      <div className="flex min-h-0 flex-1 justify-center overflow-x-hidden overflow-y-auto px-8 pt-16">
         <div
           key={current}
-          className="w-full max-w-3xl"
+          className="my-auto w-full max-w-3xl py-8"
           style={{
             animation: `${animationName} 0.3s ease-out both`,
           }}

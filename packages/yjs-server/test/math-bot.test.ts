@@ -6,7 +6,7 @@ import * as syncProtocol from "y-protocols/sync";
 import * as encoding from "lib0/encoding";
 import * as decoding from "lib0/decoding";
 import { WebSocketServer, WebSocket } from "ws";
-import { setupYjsConnection } from "../src/sync.js";
+import { setupYjsConnection, onWatch, type WatchEvent } from "../src/sync.js";
 
 const MSG_SYNC = 0;
 
@@ -232,8 +232,14 @@ describe("math-bot integration", () => {
   let botClient: TestClient;
   let studentClient: TestClient;
   let port: number;
+  let watchEvents: WatchEvent[];
+  let unsubWatch: () => void;
 
   before(async () => {
+    // 0. Collect watch events
+    watchEvents = [];
+    unsubWatch = onWatch((e) => watchEvents.push(e));
+
     // 1. Start server
     serverDoc = new Y.Doc();
     httpServer = createServer();
@@ -274,6 +280,7 @@ describe("math-bot integration", () => {
   });
 
   after(async () => {
+    unsubWatch();
     botClient.close();
     studentClient.close();
 
@@ -321,5 +328,45 @@ describe("math-bot integration", () => {
     assert.ok(student, "student presence should exist");
     assert.equal(student.get("type"), "user");
     assert.equal(student.get("status"), "waiting");
+  });
+
+  it("watcher fires 'New prompt added' on prompt insert", async () => {
+    const before = watchEvents.length;
+    const { replyArray } = sendPrompt(studentClient.doc, "1+1", "math-bot");
+    await waitForReply(replyArray);
+
+    const newEvents = watchEvents.slice(before);
+    const match = newEvents.find((e) => e.message === "New prompt added");
+    assert.ok(match, "expected a 'New prompt added' watch event");
+    assert.match(match.path, /^prompts\[\d+\]$/);
+  });
+
+  it("watcher fires 'Reply received' on reply-to-array insert", async () => {
+    const before = watchEvents.length;
+    const { replyArray } = sendPrompt(studentClient.doc, "3+3", "math-bot");
+    await waitForReply(replyArray);
+    // Allow server observer to process the reply sync
+    await new Promise((r) => setTimeout(r, 100));
+
+    const newEvents = watchEvents.slice(before);
+    const match = newEvents.find((e) => e.message === "Reply received");
+    assert.ok(match, "expected a 'Reply received' watch event");
+    assert.ok(match.value.includes("3+3=6"), `expected value to contain '3+3=6', got '${match.value}'`);
+  });
+
+  it("watcher fires 'Status changed' on presence status update", async () => {
+    const before = watchEvents.length;
+    const { replyArray } = sendPrompt(studentClient.doc, "5+5", "math-bot");
+    await waitForReply(replyArray);
+
+    const newEvents = watchEvents.slice(before);
+    const match = newEvents.find((e) => e.message === "Status changed");
+    assert.ok(match, "expected a 'Status changed' watch event");
+    assert.equal(match.pattern, "presence.*.status");
+  });
+
+  it("watcher fires 'Presence updated' on new presence entry", () => {
+    const match = watchEvents.find((e) => e.message === "Presence updated");
+    assert.ok(match, "expected a 'Presence updated' watch event");
   });
 });

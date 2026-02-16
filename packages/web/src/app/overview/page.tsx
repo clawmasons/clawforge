@@ -56,7 +56,7 @@ const slides = [
           <strong className="text-[var(--color-ink)]">
             least-privilege Docker container
           </strong>{" "}
-          built specifically for its program and role. Only the skills,
+          built specifically for its space and role. Only the skills,
           dependencies, and credentials that role requires are included.
         </p>
         <div className="mt-8 space-y-4 max-w-2xl">
@@ -74,7 +74,7 @@ const slides = [
               Fresh on every switch
             </p>
             <p className="mt-1 text-sm text-[var(--color-muted)]">
-              When a bot switches programs or roles, it gets a brand-new
+              When a bot switches spaces or roles, it gets a brand-new
               container. Previous credentials, apps, and skills are gone.
             </p>
           </div>
@@ -121,17 +121,17 @@ credentials:
     ),
   },
   {
-    title: "Programs",
+    title: "Spaces",
     subtitle: "Structured Deployments",
     content: (
       <>
         <p className="text-xl leading-relaxed text-[var(--color-muted)] max-w-2xl">
           No more &ldquo;give the bot access to everything.&rdquo; A{" "}
-          <strong className="text-[var(--color-ink)]">program</strong> defines
+          <strong className="text-[var(--color-ink)]">space</strong> defines
           the workflow: phases, roles, channels, and objectives.
         </p>
         <pre className="mt-8 rounded-xl bg-[var(--color-surface)] p-6 font-[family-name:var(--font-mono)] text-sm leading-relaxed text-[var(--color-ink)] overflow-x-auto">
-{`Program: Learn Calculus
+{`Space: Learn Calculus
 
 Roles:
   Teacher (bot)  → calculus-knowledge, solver, lesson-planner
@@ -251,13 +251,13 @@ Phases:
             </span>
             <div>
               <p className="font-semibold text-[var(--color-ink)]">
-                Launch a program
+                Launch a space
               </p>
               <pre className="mt-2 rounded-xl bg-[var(--color-surface)] p-4 font-[family-name:var(--font-mono)] text-sm leading-relaxed text-[var(--color-ink)] overflow-x-auto">
 {`npm install -g clawforge
 export CLAWFORGE_TOKEN=<your token>
 clawforge init
-clawforge bot start --program engineering --role bug-fixer`}
+clawforge bot start --space engineering --role bug-fixer`}
               </pre>
             </div>
           </li>
@@ -280,7 +280,7 @@ clawforge bot start --program engineering --role bug-fixer`}
           </li>
           <li>
             <strong className="text-[var(--color-ink)]">Structured</strong>{" "}
-            &mdash; Programs, roles, and phases replace ad-hoc bot deployments.
+            &mdash; Spaces, roles, and phases replace ad-hoc bot deployments.
           </li>
           <li>
             <strong className="text-[var(--color-ink)]">Real-time</strong>{" "}

@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/lib/trpc";
-import { programs as catalog } from "@/data/programs";
 
 const DISMISS_KEY = "clawforge-welcome-dismissed";
 
@@ -23,11 +22,9 @@ export function Dashboard() {
   const activeOrg = authClient.useActiveOrganization();
   const orgId = activeOrg.data?.id;
 
-  const { data: orgPrograms, isLoading } =
-    trpc.organizations.programs.useQuery(
-      { organizationId: orgId! },
-      { enabled: !!orgId },
-    );
+  const { data: spaces, isLoading } = trpc.spaces.list.useQuery(undefined, {
+    enabled: !!orgId,
+  });
 
   if (!orgId) {
     return (
@@ -94,36 +91,38 @@ export function Dashboard() {
             />
           ))}
         </div>
-      ) : orgPrograms && orgPrograms.length > 0 ? (
+      ) : spaces && spaces.length > 0 ? (
         <div className="space-y-4">
-          {orgPrograms.map((p) => {
-            const info = catalog.find((c) => c.id === p.programId);
-            return (
-              <Link
-                key={p.id}
-                href={`/programs/${p.programId}`}
-                className="block rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 transition-colors hover:border-[var(--color-coral)]"
-              >
+          {spaces.map((s) => (
+            <Link
+              key={s.id}
+              href={`/spaces/${s.id}`}
+              className="block rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 transition-colors hover:border-[var(--color-coral)]"
+            >
+              <div className="flex items-start justify-between">
                 <h3 className="font-[family-name:var(--font-display)] text-base font-bold">
-                  {info?.name ?? p.programId}
+                  {s.name}
                 </h3>
-                {info?.description && (
-                  <p className="mt-1 text-sm text-[var(--color-muted)]">
-                    {info.description}
-                  </p>
-                )}
-              </Link>
-            );
-          })}
+                <span className="ml-4 shrink-0 rounded-full bg-[var(--color-cream)] px-3 py-1 text-xs font-medium text-[var(--color-muted)]">
+                  {s.taskCount} {s.taskCount === 1 ? "task" : "tasks"}
+                </span>
+              </div>
+              {s.description && (
+                <p className="mt-1 text-sm text-[var(--color-muted)]">
+                  {s.description}
+                </p>
+              )}
+            </Link>
+          ))}
         </div>
       ) : (
         <div className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] p-10 text-center">
-          <p className="text-sm text-[var(--color-muted)]">No programs yet.</p>
+          <p className="text-sm text-[var(--color-muted)]">No spaces yet.</p>
           <Link
-            href="/programs"
+            href="/spaces"
             className="mt-4 inline-block rounded-full bg-[var(--color-coral)] px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-coral-deep)]"
           >
-            Browse Programs
+            Browse Spaces
           </Link>
         </div>
       )}

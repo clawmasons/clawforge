@@ -90,11 +90,9 @@ export const organization = pgTable(
     logo: text("logo"),
     createdAt: timestamp("created_at").notNull(),
     metadata: text("metadata"),
-    programId: text("program_id"),
   },
   (table) => [
     uniqueIndex("organization_slug_uidx").on(table.slug),
-    uniqueIndex("organization_programId_uidx").on(table.programId),
   ],
 );
 
@@ -117,20 +115,32 @@ export const member = pgTable(
   ],
 );
 
-export const program = pgTable(
-  "program",
+export const space = pgTable(
+  "space",
   {
     id: text("id").primaryKey(),
-    programId: text("program_id").notNull().unique(),
+    name: text("name").notNull(),
+    spaceId: text("space_id").notNull().unique(),
+    description: text("description"),
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    launchedBy: text("launched_by")
+    createdBy: text("created_by")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at").notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
   },
-  (table) => [index("program_organizationId_idx").on(table.organizationId)],
+  (table) => [
+    index("space_organizationId_idx").on(table.organizationId),
+    uniqueIndex("space_name_organizationId_uidx").on(
+      table.name,
+      table.organizationId,
+    ),
+  ],
 );
 
 export const orgApiToken = pgTable(
@@ -167,7 +177,7 @@ export const bot = pgTable(
     ownerId: text("owner_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    currentProgramId: text("current_program_id").references(() => program.id, {
+    currentSpaceId: text("current_space_id").references(() => space.id, {
       onDelete: "set null",
     }),
     currentRole: text("current_role"),
@@ -188,13 +198,13 @@ export const bot = pgTable(
   ],
 );
 
-export const programMember = pgTable(
-  "program_member",
+export const spaceMember = pgTable(
+  "space_member",
   {
     id: text("id").primaryKey(),
-    programId: text("program_id")
+    spaceId: text("space_id")
       .notNull()
-      .references(() => program.id, { onDelete: "cascade" }),
+      .references(() => space.id, { onDelete: "cascade" }),
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
@@ -202,12 +212,45 @@ export const programMember = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
-    index("program_member_programId_idx").on(table.programId),
-    index("program_member_userId_idx").on(table.userId),
-    uniqueIndex("program_member_programId_userId_uidx").on(
-      table.programId,
+    index("space_member_spaceId_idx").on(table.spaceId),
+    index("space_member_userId_idx").on(table.userId),
+    uniqueIndex("space_member_spaceId_userId_uidx").on(
+      table.spaceId,
       table.userId,
     ),
+  ],
+);
+
+export const spaceTask = pgTable(
+  "space_task",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    spaceId: text("space_id")
+      .notNull()
+      .references(() => space.id, { onDelete: "cascade" }),
+    botId: text("bot_id").references(() => bot.id, { onDelete: "set null" }),
+    role: text("role").notNull(),
+    triggers: text("triggers").notNull(),
+    schedule: text("schedule"),
+    plan: text("plan").notNull(),
+    state: text("state").default("idle").notNull(),
+    triggeredAt: timestamp("triggered_at"),
+    startedAt: timestamp("started_at"),
+    completedAt: timestamp("completed_at"),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("space_task_spaceId_idx").on(table.spaceId),
+    index("space_task_botId_idx").on(table.botId),
+    uniqueIndex("space_task_name_spaceId_uidx").on(table.name, table.spaceId),
   ],
 );
 
@@ -239,7 +282,7 @@ export const userRelations = relations(user, ({ many }) => ({
   members: many(member),
   invitations: many(invitation),
   bots: many(bot),
-  programMemberships: many(programMember),
+  spaceMemberships: many(spaceMember),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -256,23 +299,24 @@ export const accountRelations = relations(account, ({ one }) => ({
   }),
 }));
 
-export const programRelations = relations(program, ({ one, many }) => ({
+export const spaceRelations = relations(space, ({ one, many }) => ({
   organization: one(organization, {
-    fields: [program.organizationId],
+    fields: [space.organizationId],
     references: [organization.id],
   }),
-  launcher: one(user, {
-    fields: [program.launchedBy],
+  creator: one(user, {
+    fields: [space.createdBy],
     references: [user.id],
   }),
-  members: many(programMember),
+  members: many(spaceMember),
   bots: many(bot),
+  tasks: many(spaceTask),
 }));
 
 export const organizationRelations = relations(organization, ({ many }) => ({
   members: many(member),
   invitations: many(invitation),
-  programs: many(program),
+  spaces: many(space),
   apiTokens: many(orgApiToken),
   bots: many(bot),
 }));
@@ -319,19 +363,34 @@ export const botRelations = relations(bot, ({ one }) => ({
     fields: [bot.ownerId],
     references: [user.id],
   }),
-  currentProgram: one(program, {
-    fields: [bot.currentProgramId],
-    references: [program.id],
+  currentSpace: one(space, {
+    fields: [bot.currentSpaceId],
+    references: [space.id],
   }),
 }));
 
-export const programMemberRelations = relations(programMember, ({ one }) => ({
-  program: one(program, {
-    fields: [programMember.programId],
-    references: [program.id],
+export const spaceMemberRelations = relations(spaceMember, ({ one }) => ({
+  space: one(space, {
+    fields: [spaceMember.spaceId],
+    references: [space.id],
   }),
   user: one(user, {
-    fields: [programMember.userId],
+    fields: [spaceMember.userId],
+    references: [user.id],
+  }),
+}));
+
+export const spaceTaskRelations = relations(spaceTask, ({ one }) => ({
+  space: one(space, {
+    fields: [spaceTask.spaceId],
+    references: [space.id],
+  }),
+  bot: one(bot, {
+    fields: [spaceTask.botId],
+    references: [bot.id],
+  }),
+  creator: one(user, {
+    fields: [spaceTask.createdBy],
     references: [user.id],
   }),
 }));

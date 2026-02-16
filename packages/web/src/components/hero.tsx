@@ -222,10 +222,10 @@ export function Hero() {
 
         <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
           <Link
-            href="/programs"
+            href="/spaces"
             className="rounded-full bg-[var(--color-coral)] px-7 py-3 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-coral-deep)]"
           >
-            Browse Programs
+            Browse Spaces
           </Link>
           <a
             href="https://github.com/clawmasons/clawforge"

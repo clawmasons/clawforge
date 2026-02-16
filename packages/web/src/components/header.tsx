@@ -42,10 +42,10 @@ export function Header() {
           </Link>
 
           <Link
-            href="/programs"
+            href="/spaces"
             className="text-sm font-medium text-[var(--color-muted)] transition-colors hover:text-[var(--color-ink)]"
           >
-            Programs
+            Spaces
           </Link>
 
           <Link

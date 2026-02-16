@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { eq, and, or } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { db } from "../db/index.js";
-import { bot, program } from "../db/schema.js";
+import { bot, space } from "../db/schema.js";
 import { tokenAuthHook } from "../middleware/token-auth.js";
 
 export async function botRoutes(app: FastifyInstance) {
@@ -39,12 +39,12 @@ export async function botRoutes(app: FastifyInstance) {
     Body: {
       id?: string;
       name: string;
-      programId?: string;
+      spaceId?: string;
       role?: string;
       ownerId?: string;
     };
   }>("/bot/create", async (request, reply) => {
-    const { name, programId, role, ownerId } = request.body;
+    const { name, spaceId, role, ownerId } = request.body;
     const orgId = request.tokenAuth!.organizationId;
     const id = request.body.id ?? randomUUID();
     const resolvedOwnerId = ownerId ?? request.tokenAuth!.createdBy;
@@ -62,26 +62,26 @@ export async function botRoutes(app: FastifyInstance) {
         .send({ error: `Bot with name "${name}" already exists in this org` });
     }
 
-    // Resolve program slug to UUID
-    let resolvedProgramId: string | null = null;
-    if (programId) {
-      const prog = await db
-        .select({ id: program.id })
-        .from(program)
+    // Resolve space slug to UUID
+    let resolvedSpaceId: string | null = null;
+    if (spaceId) {
+      const sp = await db
+        .select({ id: space.id })
+        .from(space)
         .where(
           and(
-            eq(program.organizationId, orgId),
-            or(eq(program.id, programId), eq(program.programId, programId)),
+            eq(space.organizationId, orgId),
+            or(eq(space.id, spaceId), eq(space.spaceId, spaceId)),
           ),
         )
         .then((rows) => rows[0]);
 
-      if (!prog) {
+      if (!sp) {
         return reply
           .status(404)
-          .send({ error: `Program "${programId}" not found` });
+          .send({ error: `Space "${spaceId}" not found` });
       }
-      resolvedProgramId = prog.id;
+      resolvedSpaceId = sp.id;
     }
 
     const row = {
@@ -89,7 +89,7 @@ export async function botRoutes(app: FastifyInstance) {
       name,
       organizationId: orgId,
       ownerId: resolvedOwnerId,
-      currentProgramId: resolvedProgramId,
+      currentSpaceId: resolvedSpaceId,
       currentRole: role ?? null,
       status: "running",
       createdAt: new Date(),
@@ -105,7 +105,7 @@ export async function botRoutes(app: FastifyInstance) {
     Params: { nameOrId: string };
     Body: {
       name?: string;
-      programId?: string;
+      spaceId?: string;
       role?: string;
       status?: string;
     };
@@ -130,30 +130,30 @@ export async function botRoutes(app: FastifyInstance) {
 
     const updates: Record<string, unknown> = {};
     if (request.body.name != null) updates.name = request.body.name;
-    if (request.body.programId !== undefined) {
-      if (request.body.programId === null) {
-        updates.currentProgramId = null;
+    if (request.body.spaceId !== undefined) {
+      if (request.body.spaceId === null) {
+        updates.currentSpaceId = null;
       } else {
-        const prog = await db
-          .select({ id: program.id })
-          .from(program)
+        const sp = await db
+          .select({ id: space.id })
+          .from(space)
           .where(
             and(
-              eq(program.organizationId, orgId),
+              eq(space.organizationId, orgId),
               or(
-                eq(program.id, request.body.programId),
-                eq(program.programId, request.body.programId),
+                eq(space.id, request.body.spaceId),
+                eq(space.spaceId, request.body.spaceId),
               ),
             ),
           )
           .then((rows) => rows[0]);
 
-        if (!prog) {
+        if (!sp) {
           return reply
             .status(404)
-            .send({ error: `Program "${request.body.programId}" not found` });
+            .send({ error: `Space "${request.body.spaceId}" not found` });
         }
-        updates.currentProgramId = prog.id;
+        updates.currentSpaceId = sp.id;
       }
     }
     if (request.body.role !== undefined)

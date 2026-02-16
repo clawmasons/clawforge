@@ -29,6 +29,13 @@
       "when": 1771083913089,
       "tag": "0003_free_sphinx",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1771286400000,
+      "tag": "0004_spaces_migration",
+      "breakpoints": true
     }
   ]
 }

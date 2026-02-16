@@ -25,7 +25,7 @@ const ibmPlex = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Clawforge - Launch your Program",
+  title: "Clawforge - Build Together",
   description:
     "Where humans and claw bots collaborate to build.",
 };

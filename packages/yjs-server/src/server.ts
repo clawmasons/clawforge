@@ -16,7 +16,7 @@ const PORT = parseInt(process.env.PORT ?? "1234", 10);
 const doc = new Y.Doc();
 
 // File persistence
-const dataFile = `${WORKSPACE_DIR}/program-data-${PROGRAM_ID}.yjs`;
+const dataFile = `${DATA_DIR}/program-data-${PROGRAM_ID}.yjs`;
 const persistence = new FilePersistence(dataFile, doc);
 persistence.load();
 

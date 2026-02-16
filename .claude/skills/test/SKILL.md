@@ -28,6 +28,16 @@ pnpm --filter @clawforge/server test
 
 **Pass criteria:** exit code 0
 
+## Phase 1b: Yjs Server Tests
+
+Run the yjs-server package's unit tests (math-bot integration + watcher tests):
+
+```bash
+pnpm --filter @clawforge/yjs-server test
+```
+
+**Pass criteria:** exit code 0
+
 ## Phase 2: Web Dev Server Smoke Test
 
 1. Kill anything on port 3000:
@@ -166,6 +176,7 @@ pnpm --filter @clawforge/server test
 3. Run unit tests in the copy:
    ```bash
    cd /tmp/clawforge-test-copy && pnpm --filter @clawforge/server test
+   cd /tmp/clawforge-test-copy && pnpm --filter @clawforge/yjs-server test
    ```
 4. Remove the copy:
    ```bash
@@ -199,14 +210,15 @@ Print a formatted summary table:
 ╔══════════════════════════════════════════╦════════╗
 ║ Phase                                    ║ Result ║
 ╠══════════════════════════════════════════╬════════╣
-║ 1. Unit Tests                            ║ PASS   ║
-║ 2. Web Dev Server Smoke Test             ║ PASS   ║
-║ 3. API Health Check                      ║ FAIL   ║
-║ 4. Docker Integration Test               ║ SKIP   ║
-║ 5. Package npm Tarball                   ║ PASS   ║
-║ 6. Global Install / Uninstall            ║ PASS   ║
-║ 7. Fresh Install Test in /tmp            ║ PASS   ║
-║ 8. Cleanup                               ║ PASS   ║
+║ 1.  Unit Tests                           ║ PASS   ║
+║ 1b. Yjs Server Tests                     ║ PASS   ║
+║ 2.  Web Dev Server Smoke Test            ║ PASS   ║
+║ 3.  API Health Check                     ║ FAIL   ║
+║ 4.  Docker Integration Test              ║ SKIP   ║
+║ 5.  Package npm Tarball                  ║ PASS   ║
+║ 6.  Global Install / Uninstall           ║ PASS   ║
+║ 7.  Fresh Install Test in /tmp           ║ PASS   ║
+║ 8.  Cleanup                              ║ PASS   ║
 ╠══════════════════════════════════════════╬════════╣
 ║ OVERALL                                  ║ FAIL   ║
 ╚══════════════════════════════════════════╩════════╝

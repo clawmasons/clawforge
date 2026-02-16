@@ -22,6 +22,16 @@ declare module "openclaw/plugin-sdk" {
           finalizeInboundContext: (ctx: any) => any;
           dispatchReplyWithBufferedBlockDispatcher: (opts: any) => Promise<void>;
         };
+        session: {
+          resolveStorePath: (storeConfig: any, opts: { agentId: string }) => string;
+          readSessionUpdatedAt: (opts: { storePath: string; sessionKey: string }) => number;
+          recordInboundSession: (opts: {
+            storePath: string;
+            sessionKey: string;
+            ctx: any;
+            onRecordError: (err: Error) => void;
+          }) => Promise<void>;
+        };
       };
     };
     registerChannel: (opts: { plugin: any }) => void;

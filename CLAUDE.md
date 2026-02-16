@@ -39,50 +39,29 @@ docker compose -f infra/clawforge-server/docker-compose.yml up --build
 
 ## Workflow Orchestration
 
-### 1. Plan Mode Default
-- Enter plan mode for ANY non-trivial task (3+ steps or architectural decisions)
-- If something goes sideways, STOP and re-plan immediately - don't keep pushing
-- Use plan mode for verification steps, not just building
-- Write detailed specs upfront to reduce ambiguity
 
-### 2. Subagent Strategy to keep main context window clean
-- Offload research, exploration, and parallel analysis to subagents
-- For complex problems, throw more compute at it via subagents
-- One task per subagent for focused execution
+## Specs Repository Integration
 
-### 3. Self-Improvement Loop
-- After ANY correction from the user: update 'tasks/lessons.md' with the pattern
-- Write rules for yourself that prevent the same mistake
-- Ruthlessly iterate on these lessons until mistake rate drops
-- Review lessons at session start for relevant project
+This repo is part of the ClawForge multi-repo project. The canonical specs repo at `../specs/` is the source of truth for feature specifications, API contracts, and data models.
 
-### 4. Verification Before Done
-- Never mark a task complete without proving it works
-- Diff behavior between main and your changes when relevant
-- Ask yourself: "Would a staff engineer approve this?"
-- Run tests, check logs, demonstrate correctness
+### Before Implementing Any Feature
 
-### 5. Demand Elegance (Balanced)
-- For non-trivial changes: pause and ask "is there a more elegant way?"
-- If a fix feels hacky: "Knowing everything I know now, implement the elegant solution"
-- Skip this for simple, obvious fixes - don't over-engineer
-- Challenge your own work before presenting it
+1. Check `../specs/specs/` for a relevant feature spec. Do not begin work without one for cross-repo features.
+2. Read `../specs/constitution.md` for project-wide principles (multi-tenant isolation, security posture, open source first).
+3. Read `../specs/shared-config.md` for cross-repo conventions (naming, error handling, auth patterns).
+4. Check `../specs/contracts/` before creating or modifying any API endpoints, WebSocket messages, or event schemas. If a contract exists, implement to the contract. If no contract exists for a cross-repo API, one must be created in the specs repo first.
+5. Check `../specs/data-models/` for canonical entity definitions before modifying database schemas.
 
-### 6. Autonomous Bug Fixing
-- When given a bug report: just fix it. Don't ask for hand-holding
-- Point at logs, errors, failing tests -> then resolve them
-- Zero context switching required from the user
-- Go fix failing CI tests without being told how
+### After Implementation
 
-## Task Management
-1. **Plan First**: Write plan to 'tasks/todo.md' with checkable items
-2. **Verify Plan**: Check in before starting implementation
-3. **Track Progress**: Mark items complete as you go
-4. **Explain Changes**: High-level summary at each step
-5. **Document Results**: Add review to 'tasks/todo.md'
-6. **Capture Lessons**: Update 'tasks/lessons.md' after corrections
+- Note which spec was implemented in the PR description (link to spec file or quote the spec name).
+- Document any deviations from the spec in the PR description, with rationale.
+- If deviations are significant, file an amendment to the spec in the specs repo.
 
-## Core Principles
-- **Simplicity First**: Make every change as simple as possible. Impact minimal code.
-- **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
-- **Minimal Impact**: Changes should only touch what's necessary. Avoid introducing bugs.
+### Key Principles (from constitution.md)
+
+- **Multi-tenant isolation is non-negotiable**: Every data path must enforce tenant boundaries.
+- **Security first**: This is an access management product. Threat modeling is required for auth/authz/tenant features.
+- **Open source first**: Core functionality must work standalone without ClawForge Cloud.
+- **Contract-driven**: Cross-repo APIs are defined in specs repo contracts before implementation.
+

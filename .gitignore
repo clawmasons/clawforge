@@ -1,6 +1,9 @@
 # openclaw files
 bots/
 
+specs
+specs/
+
 # ignore generated files for sdlc
 tasks/*plan.md
 tasks/*pr.md

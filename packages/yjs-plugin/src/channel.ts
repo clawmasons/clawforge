@@ -183,7 +183,7 @@ export function createYjsChannel(client: YjsClient, botName: string, logger: Log
                 storePath,
                 sessionKey: ctxPayload.SessionKey ?? route.sessionKey,
                 ctx: ctxPayload,
-                onRecordError: (err) => {
+                onRecordError: (err: Error) => {
                   logger.error(`[yjs] failed updating session meta: ${String(err)}`);
                 },
               });
@@ -249,7 +249,7 @@ export function createYjsChannel(client: YjsClient, botName: string, logger: Log
                       logger.error(`[yjs] Failed to deliver reply: ${err instanceof Error ? err.message : String(err)}`);
                     }
                   },
-                  onError: (err, info) => {
+                  onError: (err: Error, info: { kind: string }) => {
                     logger.error(`[yjs] ${info.kind} reply failed: ${String(err)}`);
                   },
                 },

@@ -9,16 +9,16 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
-    "build:lambda": "node esbuild.lambda.mjs",
     "clean": "rm -rf dist",
     "start": "node dist/server.js",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "build:lambda": "node esbuild.lambda.mjs"
   },
   "dependencies": {
-    "@aws-sdk/rds-signer": "^3.987.0",
+    "@aws-sdk/rds-signer": "^3.0.0",
     "@fastify/aws-lambda": "^5.0.0",
     "@fastify/cors": "^11.2.0",
     "@trpc/server": "^11.0.0",

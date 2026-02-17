@@ -23,6 +23,11 @@ export function OrgSwitcher({
   const isOwner = members?.some(
     (m) => m.userId === activeSession.data?.user?.id && m.role === "owner",
   );
+  const isAdminOrOwner = members?.some(
+    (m) =>
+      m.userId === activeSession.data?.user?.id &&
+      (m.role === "owner" || m.role === "admin"),
+  );
 
   // Auto-set first org as active when none is selected
   useEffect(() => {
@@ -130,6 +135,16 @@ export function OrgSwitcher({
           ))}
 
           <div className="my-1 border-t border-[var(--color-border)]" />
+
+          {isAdminOrOwner && (
+            <Link
+              href="/settings/members"
+              onClick={() => setOpen(false)}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[var(--color-muted)] transition-colors hover:bg-[var(--color-cream)] hover:text-[var(--color-ink)]"
+            >
+              Members
+            </Link>
+          )}
 
           {isOwner && (
             <Link

@@ -1,11 +1,12 @@
 import { z } from "zod";
-import { eq, and, count, sql } from "drizzle-orm";
+import { eq, and, count, sql, inArray, lt } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { TRPCError } from "@trpc/server";
 import { router, publicProcedure, protectedProcedure } from "./trpc.js";
 import { db } from "./db/index.js";
-import { organization, member, user, space, spaceMember, spaceTask, orgApiToken, bot } from "./db/schema.js";
+import { organization, member, user, space, spaceMember, spaceTask, orgApiToken, bot, invitation } from "./db/schema.js";
 import { generateApiToken } from "./lib/token.js";
+import { auth } from "./auth.js";
 
 async function verifyOrgOwner(userId: string, orgId: string) {
   const row = await db
@@ -50,6 +51,42 @@ async function verifyOrgMember(userId: string, orgId: string) {
       message: "You are not a member of this organization.",
     });
   }
+}
+
+async function verifySpaceAdmin(userId: string, spaceId: string) {
+  const spaceRow = await db
+    .select({ organizationId: space.organizationId })
+    .from(space)
+    .where(eq(space.id, spaceId))
+    .then((rows) => rows[0]);
+
+  if (!spaceRow) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Space not found." });
+  }
+
+  // Check if user is an org admin/owner (implicit access to all spaces)
+  const orgMemberRow = await db
+    .select({ role: member.role })
+    .from(member)
+    .where(and(eq(member.userId, userId), eq(member.organizationId, spaceRow.organizationId)))
+    .then((rows) => rows[0]);
+
+  if (orgMemberRow && ["owner", "admin"].includes(orgMemberRow.role)) {
+    return { orgRole: orgMemberRow.role, spaceRole: null as string | null, organizationId: spaceRow.organizationId };
+  }
+
+  // Check space-level role
+  const spaceMemberRow = await db
+    .select({ role: spaceMember.role })
+    .from(spaceMember)
+    .where(and(eq(spaceMember.userId, userId), eq(spaceMember.spaceId, spaceId)))
+    .then((rows) => rows[0]);
+
+  if (!spaceMemberRow || !["owner", "admin"].includes(spaceMemberRow.role)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Only space admins and owners can perform this action." });
+  }
+
+  return { orgRole: orgMemberRow?.role ?? null, spaceRole: spaceMemberRow.role, organizationId: spaceRow.organizationId };
 }
 
 function generateSpaceId(): string {
@@ -203,6 +240,200 @@ export const appRouter = router({
           return { ok: true };
         }),
     }),
+  }),
+
+  invitations: router({
+    get: publicProcedure
+      .input(z.object({ id: z.string() }))
+      .query(async ({ input }) => {
+        const row = await db
+          .select({
+            id: invitation.id,
+            email: invitation.email,
+            role: invitation.role,
+            status: invitation.status,
+            expiresAt: invitation.expiresAt,
+            orgName: organization.name,
+            orgSlug: organization.slug,
+            orgLogo: organization.logo,
+          })
+          .from(invitation)
+          .innerJoin(organization, eq(invitation.organizationId, organization.id))
+          .where(eq(invitation.id, input.id))
+          .then((rows) => rows[0]);
+
+        if (!row) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Invitation not found." });
+        }
+
+        // Lazy expiration: mark pending invitations past expiresAt as expired
+        if (row.status === "pending" && row.expiresAt < new Date()) {
+          await db
+            .update(invitation)
+            .set({ status: "expired" })
+            .where(eq(invitation.id, input.id));
+          row.status = "expired";
+        }
+
+        return {
+          id: row.id,
+          email: row.email,
+          role: row.role,
+          status: row.status,
+          expiresAt: row.expiresAt,
+          organization: {
+            name: row.orgName,
+            slug: row.orgSlug,
+            logo: row.orgLogo,
+          },
+        };
+      }),
+
+    list: protectedProcedure
+      .input(
+        z.object({
+          status: z.enum(["pending", "accepted", "canceled", "expired"]).optional(),
+        }).optional(),
+      )
+      .query(async ({ ctx, input }) => {
+        if (!ctx.session.activeOrganizationId) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "No active organization set." });
+        }
+
+        await verifyOrgAdmin(ctx.user.id, ctx.session.activeOrganizationId);
+
+        const statusFilter = input?.status ?? "pending";
+
+        // Lazy expiration: mark pending invitations past expiresAt as expired
+        await db
+          .update(invitation)
+          .set({ status: "expired" })
+          .where(
+            and(
+              eq(invitation.organizationId, ctx.session.activeOrganizationId),
+              eq(invitation.status, "pending"),
+              lt(invitation.expiresAt, new Date()),
+            ),
+          );
+
+        const rows = await db
+          .select({
+            id: invitation.id,
+            email: invitation.email,
+            role: invitation.role,
+            status: invitation.status,
+            expiresAt: invitation.expiresAt,
+            createdAt: invitation.createdAt,
+            inviterId: user.id,
+            inviterName: user.name,
+            inviterImage: user.image,
+          })
+          .from(invitation)
+          .innerJoin(user, eq(invitation.inviterId, user.id))
+          .where(
+            and(
+              eq(invitation.organizationId, ctx.session.activeOrganizationId),
+              eq(invitation.status, statusFilter),
+            ),
+          )
+          .orderBy(sql`${invitation.createdAt} desc`);
+
+        return rows.map((r) => ({
+          id: r.id,
+          email: r.email,
+          role: r.role,
+          status: r.status,
+          expiresAt: r.expiresAt,
+          createdAt: r.createdAt,
+          inviter: {
+            id: r.inviterId,
+            name: r.inviterName,
+            image: r.inviterImage,
+          },
+        }));
+      }),
+
+    resend: protectedProcedure
+      .input(z.object({ invitationId: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.session.activeOrganizationId) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "No active organization set." });
+        }
+
+        await verifyOrgAdmin(ctx.user.id, ctx.session.activeOrganizationId);
+
+        const existing = await db
+          .select()
+          .from(invitation)
+          .where(eq(invitation.id, input.invitationId))
+          .then((rows) => rows[0]);
+
+        if (!existing) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Invitation not found." });
+        }
+
+        if (existing.organizationId !== ctx.session.activeOrganizationId) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Invitation not found." });
+        }
+
+        // Check lazy expiration
+        const effectiveStatus =
+          existing.status === "pending" && existing.expiresAt < new Date()
+            ? "expired"
+            : existing.status;
+
+        if (effectiveStatus !== "pending" && effectiveStatus !== "expired") {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Only pending or expired invitations can be resent.",
+          });
+        }
+
+        // Create new invitation via Better Auth BEFORE canceling the old one
+        // so the old invitation is only canceled if a replacement exists
+        const headers = new Headers();
+        headers.set("cookie", `better-auth.session_token=${ctx.session.token}`);
+
+        await auth.api.createInvitation({
+          headers,
+          body: {
+            email: existing.email,
+            role: (existing.role ?? "member") as "member" | "owner" | "admin",
+            organizationId: ctx.session.activeOrganizationId,
+          },
+        });
+
+        // Find the newly created invitation
+        const newInv = await db
+          .select({ id: invitation.id, email: invitation.email, expiresAt: invitation.expiresAt })
+          .from(invitation)
+          .where(
+            and(
+              eq(invitation.organizationId, ctx.session.activeOrganizationId),
+              eq(invitation.email, existing.email),
+              eq(invitation.status, "pending"),
+              sql`${invitation.id} != ${input.invitationId}`,
+            ),
+          )
+          .orderBy(sql`${invitation.createdAt} desc`)
+          .then((rows) => rows[0]);
+
+        if (!newInv) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create new invitation." });
+        }
+
+        // Cancel the old invitation only after the new one is confirmed
+        await db
+          .update(invitation)
+          .set({ status: "canceled" })
+          .where(eq(invitation.id, input.invitationId));
+
+        return {
+          id: newInv.id,
+          email: newInv.email,
+          expiresAt: newInv.expiresAt,
+        };
+      }),
   }),
 
   spaces: router({
@@ -736,6 +967,203 @@ export const appRouter = router({
           await verifyOrgAdmin(ctx.user.id, spaceRow.organizationId);
 
           await db.delete(spaceTask).where(eq(spaceTask.id, input.taskId));
+
+          return { ok: true as const };
+        }),
+    }),
+
+    members: router({
+      list: protectedProcedure
+        .input(z.object({ spaceId: z.string() }))
+        .query(async ({ ctx, input }) => {
+          const spaceRow = await db
+            .select({ organizationId: space.organizationId })
+            .from(space)
+            .where(eq(space.id, input.spaceId))
+            .then((rows) => rows[0]);
+
+          if (!spaceRow) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Space not found." });
+          }
+
+          // Any org member can view space members
+          await verifyOrgMember(ctx.user.id, spaceRow.organizationId);
+
+          const rows = await db
+            .select({
+              id: spaceMember.id,
+              userId: spaceMember.userId,
+              role: spaceMember.role,
+              createdAt: spaceMember.createdAt,
+              userName: user.name,
+              userEmail: user.email,
+              userImage: user.image,
+            })
+            .from(spaceMember)
+            .innerJoin(user, eq(spaceMember.userId, user.id))
+            .where(eq(spaceMember.spaceId, input.spaceId))
+            .orderBy(
+              sql`CASE ${spaceMember.role} WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END`,
+              sql`${spaceMember.createdAt} asc`,
+            );
+
+          return rows.map((r) => ({
+            id: r.id,
+            userId: r.userId,
+            role: r.role,
+            createdAt: r.createdAt,
+            user: {
+              id: r.userId,
+              name: r.userName,
+              email: r.userEmail,
+              image: r.userImage,
+            },
+          }));
+        }),
+
+      add: protectedProcedure
+        .input(
+          z.object({
+            spaceId: z.string(),
+            userId: z.string(),
+            role: z.enum(["owner", "admin", "member"]).default("member"),
+          }),
+        )
+        .mutation(async ({ ctx, input }) => {
+          await verifySpaceAdmin(ctx.user.id, input.spaceId);
+
+          // Get the space's org
+          const spaceRow = await db
+            .select({ organizationId: space.organizationId })
+            .from(space)
+            .where(eq(space.id, input.spaceId))
+            .then((rows) => rows[0]);
+
+          if (!spaceRow) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Space not found." });
+          }
+
+          // Validate target user is an org member
+          const orgMemberRow = await db
+            .select({ id: member.id })
+            .from(member)
+            .where(and(eq(member.userId, input.userId), eq(member.organizationId, spaceRow.organizationId)))
+            .then((rows) => rows[0]);
+
+          if (!orgMemberRow) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "User is not a member of this organization." });
+          }
+
+          // Check for existing space membership
+          const existingMember = await db
+            .select({ id: spaceMember.id })
+            .from(spaceMember)
+            .where(and(eq(spaceMember.spaceId, input.spaceId), eq(spaceMember.userId, input.userId)))
+            .then((rows) => rows[0]);
+
+          if (existingMember) {
+            throw new TRPCError({ code: "CONFLICT", message: "User is already a member of this space." });
+          }
+
+          const id = randomUUID();
+          const now = new Date();
+
+          await db.insert(spaceMember).values({
+            id,
+            spaceId: input.spaceId,
+            userId: input.userId,
+            role: input.role,
+            createdAt: now,
+          });
+
+          return { id, userId: input.userId, role: input.role, createdAt: now };
+        }),
+
+      updateRole: protectedProcedure
+        .input(
+          z.object({
+            spaceId: z.string(),
+            userId: z.string(),
+            role: z.enum(["owner", "admin", "member"]),
+          }),
+        )
+        .mutation(async ({ ctx, input }) => {
+          const authResult = await verifySpaceAdmin(ctx.user.id, input.spaceId);
+
+          // Only space owners and org admins/owners can change roles
+          const isSpaceOwner = authResult.spaceRole === "owner";
+          const isOrgAdmin = authResult.orgRole && ["owner", "admin"].includes(authResult.orgRole);
+          if (!isSpaceOwner && !isOrgAdmin) {
+            throw new TRPCError({ code: "FORBIDDEN", message: "Only space owners and org admins can change roles." });
+          }
+
+          const targetMember = await db
+            .select({ id: spaceMember.id, role: spaceMember.role })
+            .from(spaceMember)
+            .where(and(eq(spaceMember.spaceId, input.spaceId), eq(spaceMember.userId, input.userId)))
+            .then((rows) => rows[0]);
+
+          if (!targetMember) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Member not found in this space." });
+          }
+
+          // Guard: cannot demote the last owner
+          if (targetMember.role === "owner" && input.role !== "owner") {
+            const ownerCount = await db
+              .select({ count: count() })
+              .from(spaceMember)
+              .where(and(eq(spaceMember.spaceId, input.spaceId), eq(spaceMember.role, "owner")))
+              .then((rows) => rows[0]?.count ?? 0);
+
+            if (ownerCount <= 1) {
+              throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot demote the last space owner." });
+            }
+          }
+
+          await db
+            .update(spaceMember)
+            .set({ role: input.role })
+            .where(and(eq(spaceMember.spaceId, input.spaceId), eq(spaceMember.userId, input.userId)));
+
+          return { userId: input.userId, role: input.role };
+        }),
+
+      remove: protectedProcedure
+        .input(z.object({ spaceId: z.string(), userId: z.string() }))
+        .mutation(async ({ ctx, input }) => {
+          const authResult = await verifySpaceAdmin(ctx.user.id, input.spaceId);
+
+          const targetMember = await db
+            .select({ id: spaceMember.id, role: spaceMember.role })
+            .from(spaceMember)
+            .where(and(eq(spaceMember.spaceId, input.spaceId), eq(spaceMember.userId, input.userId)))
+            .then((rows) => rows[0]);
+
+          if (!targetMember) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Member not found in this space." });
+          }
+
+          // Space admins cannot remove space owners
+          if (targetMember.role === "owner" && authResult.spaceRole === "admin" && !authResult.orgRole?.match(/^(owner|admin)$/)) {
+            throw new TRPCError({ code: "FORBIDDEN", message: "Space admins cannot remove space owners." });
+          }
+
+          // Guard: cannot remove the last owner
+          if (targetMember.role === "owner") {
+            const ownerCount = await db
+              .select({ count: count() })
+              .from(spaceMember)
+              .where(and(eq(spaceMember.spaceId, input.spaceId), eq(spaceMember.role, "owner")))
+              .then((rows) => rows[0]?.count ?? 0);
+
+            if (ownerCount <= 1) {
+              throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot remove the last space owner." });
+            }
+          }
+
+          await db
+            .delete(spaceMember)
+            .where(and(eq(spaceMember.spaceId, input.spaceId), eq(spaceMember.userId, input.userId)));
 
           return { ok: true as const };
         }),

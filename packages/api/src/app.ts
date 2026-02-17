@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import rateLimit from "@fastify/rate-limit";
 import {
   fastifyTRPCPlugin,
   FastifyTRPCPluginOptions,
@@ -16,6 +17,13 @@ export async function createApp() {
   await server.register(cors, {
     origin: process.env.WEB_URL ?? "http://localhost:3000",
     credentials: true,
+  });
+
+  // Rate limiting for auth routes (invitation acceptance, etc.)
+  await server.register(rateLimit, {
+    max: 100,
+    timeWindow: "1 minute",
+    allowList: ["127.0.0.1"],
   });
 
   // Health check

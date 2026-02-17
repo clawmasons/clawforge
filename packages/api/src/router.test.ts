@@ -9,24 +9,36 @@ function nextResult() {
   return queryResults[queryIndex++] ?? [];
 }
 
-const mockInsert = vi.fn();
-const mockValues = vi.fn();
-const mockUpdate = vi.fn();
-const mockSet = vi.fn();
-const mockDelete = vi.fn();
+// Terminal query node: supports .then() and .orderBy().then()
+function makeTerminal() {
+  const result = nextResult();
+  return {
+    then: (fn: (rows: unknown[]) => unknown) =>
+      Promise.resolve(fn(result)),
+    orderBy: (..._oArgs: unknown[]) => ({
+      then: (fn: (rows: unknown[]) => unknown) =>
+        Promise.resolve(fn(result)),
+    }),
+  };
+}
+
+const { mockInsert, mockValues, mockUpdate, mockSet, mockDelete, mockCreateInvitation } = vi.hoisted(() => ({
+  mockInsert: vi.fn(),
+  mockValues: vi.fn(),
+  mockUpdate: vi.fn(),
+  mockSet: vi.fn(),
+  mockDelete: vi.fn(),
+  mockCreateInvitation: vi.fn(),
+}));
 
 vi.mock("./db/index.js", () => ({
   db: {
     select: (..._args: unknown[]) => ({
       from: (..._fArgs: unknown[]) => {
         const fromObj = {
-          where: (..._wArgs: unknown[]) => ({
-            then: (fn: (rows: unknown[]) => unknown) =>
-              Promise.resolve(fn(nextResult())),
-          }),
+          where: (..._wArgs: unknown[]) => makeTerminal(),
           innerJoin: (..._jArgs: unknown[]) => ({
-            where: (..._wArgs: unknown[]) =>
-              Promise.resolve(nextResult()),
+            where: (..._wArgs: unknown[]) => makeTerminal(),
           }),
           // Make from() thenable for queries without .where()
           then: (resolve: (v: unknown) => void) =>
@@ -72,11 +84,11 @@ vi.mock("./lib/token.js", () => ({
   }),
 }));
 
-// Mock auth
 vi.mock("./auth.js", () => ({
   auth: {
     api: {
       getSession: vi.fn().mockResolvedValue(null),
+      createInvitation: mockCreateInvitation,
     },
   },
 }));
@@ -354,5 +366,335 @@ describe("organizations.tokens.toggleEnabled", () => {
     expect(result).toEqual({ ok: true });
     expect(mockUpdate).toHaveBeenCalled();
     expect(mockSet).toHaveBeenCalledWith({ enabled: false });
+  });
+});
+
+// ─── Invitation Tests ────────────────────────────────────────────────────────
+
+describe("invitations.get", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    queryResults = [];
+    queryIndex = 0;
+  });
+
+  it("returns invitation with org details", async () => {
+    const caller = createCaller(null); // public procedure
+    const futureDate = new Date("2099-12-31T00:00:00Z");
+    // Query 1: innerJoin(organization).where(id).then(rows => rows[0])
+    queryResults = [[{
+      id: "inv-1",
+      email: "new@acme.com",
+      role: "member",
+      status: "pending",
+      expiresAt: futureDate,
+      orgName: "Acme Corp",
+      orgSlug: "acme-corp",
+      orgLogo: null,
+    }]];
+
+    const result = await caller.invitations.get({ id: "inv-1" });
+    expect(result).toEqual({
+      id: "inv-1",
+      email: "new@acme.com",
+      role: "member",
+      status: "pending",
+      expiresAt: futureDate,
+      organization: {
+        name: "Acme Corp",
+        slug: "acme-corp",
+        logo: null,
+      },
+    });
+  });
+
+  it("throws NOT_FOUND for missing invitation", async () => {
+    const caller = createCaller(null);
+    // Query 1: innerJoin returns empty
+    queryResults = [[]];
+
+    await expect(
+      caller.invitations.get({ id: "inv-missing" }),
+    ).rejects.toThrow(/not found/i);
+  });
+
+  it("marks expired pending invitation via lazy expiration", async () => {
+    const caller = createCaller(null);
+    const pastDate = new Date("2020-01-01T00:00:00Z");
+    // Query 1: invitation found, pending but past expiresAt
+    queryResults = [[{
+      id: "inv-1",
+      email: "new@acme.com",
+      role: "member",
+      status: "pending",
+      expiresAt: pastDate,
+      orgName: "Acme Corp",
+      orgSlug: "acme-corp",
+      orgLogo: null,
+    }]];
+
+    const result = await caller.invitations.get({ id: "inv-1" });
+    expect(result.status).toBe("expired");
+    expect(mockUpdate).toHaveBeenCalled();
+    expect(mockSet).toHaveBeenCalledWith({ status: "expired" });
+  });
+
+  it("does not update non-expired pending invitation", async () => {
+    const caller = createCaller(null);
+    const futureDate = new Date("2099-12-31T00:00:00Z");
+    queryResults = [[{
+      id: "inv-1",
+      email: "new@acme.com",
+      role: "member",
+      status: "pending",
+      expiresAt: futureDate,
+      orgName: "Acme Corp",
+      orgSlug: "acme-corp",
+      orgLogo: null,
+    }]];
+
+    const result = await caller.invitations.get({ id: "inv-1" });
+    expect(result.status).toBe("pending");
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe("invitations.list", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    queryResults = [];
+    queryIndex = 0;
+  });
+
+  it("returns pending invitations for org admin", async () => {
+    const caller = createCaller(testUser, "org-1");
+    const now = new Date();
+    // Query 1: verifyOrgAdmin → admin
+    // (db.update for lazy expiration — mockUpdate, no queryResults consumed)
+    // Query 2: innerJoin(user).where().orderBy() → invitation rows
+    queryResults = [
+      [{ role: "admin" }],
+      [{
+        id: "inv-1",
+        email: "new@acme.com",
+        role: "member",
+        status: "pending",
+        expiresAt: new Date("2099-12-31"),
+        createdAt: now,
+        inviterId: "user-1",
+        inviterName: "Test User",
+        inviterImage: null,
+      }],
+    ];
+
+    const result = await caller.invitations.list();
+    expect(result).toEqual([{
+      id: "inv-1",
+      email: "new@acme.com",
+      role: "member",
+      status: "pending",
+      expiresAt: new Date("2099-12-31"),
+      createdAt: now,
+      inviter: {
+        id: "user-1",
+        name: "Test User",
+        image: null,
+      },
+    }]);
+  });
+
+  it("throws UNAUTHORIZED without active org", async () => {
+    const caller = createCaller(testUser); // no activeOrganizationId
+
+    await expect(
+      caller.invitations.list(),
+    ).rejects.toThrow(/No active organization/);
+  });
+
+  it("throws FORBIDDEN for non-admin", async () => {
+    const caller = createCaller(testUser, "org-1");
+    // Query 1: verifyOrgAdmin → member (not admin/owner)
+    queryResults = [[{ role: "member" }]];
+
+    await expect(
+      caller.invitations.list(),
+    ).rejects.toThrow(/admins and owners/);
+  });
+
+  it("throws UNAUTHORIZED if not authenticated", async () => {
+    const caller = createCaller(null);
+
+    await expect(
+      caller.invitations.list(),
+    ).rejects.toThrow(/UNAUTHORIZED/);
+  });
+});
+
+describe("invitations.resend", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    queryResults = [];
+    queryIndex = 0;
+  });
+
+  it("cancels old invitation, creates new, returns new invitation", async () => {
+    const caller = createCaller(testUser, "org-1");
+    const newExpiry = new Date("2099-12-31T00:00:00Z");
+    // Query 1: verifyOrgAdmin → admin
+    // Query 2: select existing invitation → found, pending, same org
+    // (db.update to cancel — mockUpdate)
+    // (auth.api.createInvitation — mock)
+    // Query 3: select new invitation → found
+    queryResults = [
+      [{ role: "admin" }],
+      [{
+        id: "inv-old",
+        email: "new@acme.com",
+        role: "member",
+        status: "pending",
+        expiresAt: new Date("2099-12-31"),
+        organizationId: "org-1",
+      }],
+      [{
+        id: "inv-new",
+        email: "new@acme.com",
+        expiresAt: newExpiry,
+      }],
+    ];
+
+    const result = await caller.invitations.resend({ invitationId: "inv-old" });
+    expect(result).toEqual({
+      id: "inv-new",
+      email: "new@acme.com",
+      expiresAt: newExpiry,
+    });
+    expect(mockUpdate).toHaveBeenCalled();
+    expect(mockSet).toHaveBeenCalledWith({ status: "canceled" });
+    expect(mockCreateInvitation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: {
+          email: "new@acme.com",
+          role: "member",
+          organizationId: "org-1",
+        },
+      }),
+    );
+  });
+
+  it("allows resend for expired invitations", async () => {
+    const caller = createCaller(testUser, "org-1");
+    queryResults = [
+      [{ role: "admin" }],
+      [{
+        id: "inv-old",
+        email: "new@acme.com",
+        role: "admin",
+        status: "expired",
+        expiresAt: new Date("2020-01-01"),
+        organizationId: "org-1",
+      }],
+      [{
+        id: "inv-new",
+        email: "new@acme.com",
+        expiresAt: new Date("2099-12-31"),
+      }],
+    ];
+
+    const result = await caller.invitations.resend({ invitationId: "inv-old" });
+    expect(result.id).toBe("inv-new");
+    expect(mockCreateInvitation).toHaveBeenCalled();
+  });
+
+  it("allows resend for lazily-expired (pending + past expiresAt)", async () => {
+    const caller = createCaller(testUser, "org-1");
+    queryResults = [
+      [{ role: "admin" }],
+      [{
+        id: "inv-old",
+        email: "new@acme.com",
+        role: "member",
+        status: "pending",
+        expiresAt: new Date("2020-01-01"), // past — lazily expired
+        organizationId: "org-1",
+      }],
+      [{
+        id: "inv-new",
+        email: "new@acme.com",
+        expiresAt: new Date("2099-12-31"),
+      }],
+    ];
+
+    const result = await caller.invitations.resend({ invitationId: "inv-old" });
+    expect(result.id).toBe("inv-new");
+  });
+
+  it("rejects resend for accepted invitation", async () => {
+    const caller = createCaller(testUser, "org-1");
+    queryResults = [
+      [{ role: "admin" }],
+      [{
+        id: "inv-old",
+        email: "new@acme.com",
+        role: "member",
+        status: "accepted",
+        expiresAt: new Date("2099-12-31"),
+        organizationId: "org-1",
+      }],
+    ];
+
+    await expect(
+      caller.invitations.resend({ invitationId: "inv-old" }),
+    ).rejects.toThrow(/pending or expired/);
+  });
+
+  it("throws NOT_FOUND if invitation belongs to different org", async () => {
+    const caller = createCaller(testUser, "org-1");
+    queryResults = [
+      [{ role: "admin" }],
+      [{
+        id: "inv-old",
+        email: "new@acme.com",
+        role: "member",
+        status: "pending",
+        expiresAt: new Date("2099-12-31"),
+        organizationId: "org-other",
+      }],
+    ];
+
+    await expect(
+      caller.invitations.resend({ invitationId: "inv-old" }),
+    ).rejects.toThrow(/not found/i);
+  });
+
+  it("throws NOT_FOUND for missing invitation", async () => {
+    const caller = createCaller(testUser, "org-1");
+    queryResults = [
+      [{ role: "admin" }],
+      [], // no invitation found
+    ];
+
+    await expect(
+      caller.invitations.resend({ invitationId: "inv-missing" }),
+    ).rejects.toThrow(/not found/i);
+  });
+
+  it("throws INTERNAL_SERVER_ERROR if new invitation not found after creation", async () => {
+    const caller = createCaller(testUser, "org-1");
+    queryResults = [
+      [{ role: "admin" }],
+      [{
+        id: "inv-old",
+        email: "new@acme.com",
+        role: "member",
+        status: "pending",
+        expiresAt: new Date("2099-12-31"),
+        organizationId: "org-1",
+      }],
+      [], // new invitation not found
+    ];
+
+    await expect(
+      caller.invitations.resend({ invitationId: "inv-old" }),
+    ).rejects.toThrow(/Failed to create/);
   });
 });

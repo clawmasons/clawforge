@@ -2,170 +2,13 @@ import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createServer, type Server as HttpServer } from "node:http";
 import * as Y from "yjs";
-import * as syncProtocol from "y-protocols/sync";
-import * as encoding from "lib0/encoding";
-import * as decoding from "lib0/decoding";
 import { WebSocketServer, WebSocket } from "ws";
+import { ClawforgeYjsClient } from "@clawforge/yjs-client";
 import {
   setupYjsConnection,
   onWatch,
   type WatchEvent,
-  MSG_SYNC,
-  MSG_SUBSPACE_SYNC,
-  MSG_PERMISSION_ERROR,
 } from "../src/sync.js";
-
-// ---------------------------------------------------------------------------
-// Subspace-aware test client
-// ---------------------------------------------------------------------------
-
-interface TestClient {
-  doc: Y.Doc;
-  subspaces: Map<string, Y.Doc>;
-  ws: WebSocket;
-  synced: Promise<void>;
-  close: () => void;
-  /** Request sync for a subspace. Returns the local Y.Doc for it. */
-  syncSubspace: (name: string) => Y.Doc;
-}
-
-function createTestClient(port: number): TestClient {
-  const doc = new Y.Doc();
-  const subspaces = new Map<string, Y.Doc>();
-  const ws = new WebSocket(`ws://127.0.0.1:${port}`);
-  ws.binaryType = "arraybuffer";
-
-  let resolveSynced: () => void;
-  let rootSynced = false;
-  const synced = new Promise<void>((resolve) => {
-    resolveSynced = resolve;
-  });
-
-  ws.on("open", () => {
-    // Send root doc syncStep1
-    const encoder = encoding.createEncoder();
-    encoding.writeVarUint(encoder, MSG_SYNC);
-    syncProtocol.writeSyncStep1(encoder, doc);
-    ws.send(encoding.toUint8Array(encoder));
-  });
-
-  ws.on("message", (data: ArrayBuffer | Buffer) => {
-    const message = new Uint8Array(data as ArrayBuffer);
-    const decoder = decoding.createDecoder(message);
-    const messageType = decoding.readVarUint(decoder);
-
-    switch (messageType) {
-      case MSG_SYNC: {
-        const responseEncoder = encoding.createEncoder();
-        encoding.writeVarUint(responseEncoder, MSG_SYNC);
-        const syncType = syncProtocol.readSyncMessage(
-          decoder,
-          responseEncoder,
-          doc,
-          "remote",
-        );
-        if (syncType === 1 && !rootSynced) {
-          rootSynced = true;
-          resolveSynced();
-        }
-        if (encoding.length(responseEncoder) > 1) {
-          ws.send(encoding.toUint8Array(responseEncoder));
-        }
-        break;
-      }
-      case MSG_SUBSPACE_SYNC: {
-        const subspaceName = decoding.readVarString(decoder);
-        let isNew = false;
-        let subdoc = subspaces.get(subspaceName);
-        if (!subdoc) {
-          isNew = true;
-          subdoc = new Y.Doc();
-          subspaces.set(subspaceName, subdoc);
-          // Auto-forward local updates for this subspace to server
-          subdoc.on("update", (update: Uint8Array, origin: unknown) => {
-            if (origin === "remote") return;
-            if (ws.readyState !== WebSocket.OPEN) return;
-            const encoder = encoding.createEncoder();
-            encoding.writeVarUint(encoder, MSG_SUBSPACE_SYNC);
-            encoding.writeVarString(encoder, subspaceName);
-            syncProtocol.writeUpdate(encoder, update);
-            ws.send(encoding.toUint8Array(encoder));
-          });
-        }
-        const responseEncoder = encoding.createEncoder();
-        encoding.writeVarUint(responseEncoder, MSG_SUBSPACE_SYNC);
-        encoding.writeVarString(responseEncoder, subspaceName);
-        const beforeLen = encoding.length(responseEncoder);
-        syncProtocol.readSyncMessage(decoder, responseEncoder, subdoc, "remote");
-        if (encoding.length(responseEncoder) > beforeLen) {
-          ws.send(encoding.toUint8Array(responseEncoder));
-        }
-        // On first contact with a subspace, also send our own step1
-        // so the server replies with step2 containing the data we need
-        if (isNew) {
-          const step1Encoder = encoding.createEncoder();
-          encoding.writeVarUint(step1Encoder, MSG_SUBSPACE_SYNC);
-          encoding.writeVarString(step1Encoder, subspaceName);
-          syncProtocol.writeSyncStep1(step1Encoder, subdoc);
-          ws.send(encoding.toUint8Array(step1Encoder));
-        }
-        break;
-      }
-      case MSG_PERMISSION_ERROR: {
-        const payload = decoding.readVarString(decoder);
-        console.warn("[test-client] Permission error:", payload);
-        break;
-      }
-    }
-  });
-
-  // Forward local root doc updates to server
-  const onRootUpdate = (update: Uint8Array, origin: unknown) => {
-    if (origin === "remote") return;
-    if (ws.readyState !== WebSocket.OPEN) return;
-    const encoder = encoding.createEncoder();
-    encoding.writeVarUint(encoder, MSG_SYNC);
-    syncProtocol.writeUpdate(encoder, update);
-    ws.send(encoding.toUint8Array(encoder));
-  };
-  doc.on("update", onRootUpdate);
-
-  /** Request sync for a subspace. Creates the local doc, sends step1,
-   *  and registers an update forwarder. */
-  const syncSubspace = (name: string): Y.Doc => {
-    let subdoc = subspaces.get(name);
-    if (subdoc) return subdoc;
-    subdoc = new Y.Doc();
-    subspaces.set(name, subdoc);
-    // Auto-forward local updates for this subspace
-    subdoc.on("update", (update: Uint8Array, origin: unknown) => {
-      if (origin === "remote") return;
-      if (ws.readyState !== WebSocket.OPEN) return;
-      const enc = encoding.createEncoder();
-      encoding.writeVarUint(enc, MSG_SUBSPACE_SYNC);
-      encoding.writeVarString(enc, name);
-      syncProtocol.writeUpdate(enc, update);
-      ws.send(encoding.toUint8Array(enc));
-    });
-    // Send step1 — server responds with step2 (the data)
-    const enc = encoding.createEncoder();
-    encoding.writeVarUint(enc, MSG_SUBSPACE_SYNC);
-    encoding.writeVarString(enc, name);
-    syncProtocol.writeSyncStep1(enc, subdoc);
-    ws.send(encoding.toUint8Array(enc));
-    return subdoc;
-  };
-
-  const close = () => {
-    doc.off("update", onRootUpdate);
-    for (const subdoc of subspaces.values()) {
-      subdoc.destroy();
-    }
-    ws.close();
-  };
-
-  return { doc, subspaces, ws, synced, close, syncSubspace };
-}
 
 // ---------------------------------------------------------------------------
 // Math-bot — observes prompts subspace, evaluates safe math, writes reply
@@ -173,7 +16,7 @@ function createTestClient(port: number): TestClient {
 
 const SAFE_MATH_RE = /^[\d+\-*/().%\s]+$/;
 
-function startMathBot(client: TestClient, botName: string): void {
+function startMathBot(client: ClawforgeYjsClient, botName: string): void {
   const promptsDoc = client.subspaces.get("prompts")!;
   const presenceDoc = client.subspaces.get("presence")!;
   const prompts: Y.Array<Y.Map<unknown>> = promptsDoc.getArray("prompts");
@@ -318,8 +161,8 @@ describe("math-bot integration", () => {
   let httpServer: HttpServer;
   let wss: WebSocketServer;
   let serverDoc: Y.Doc;
-  let botClient: TestClient;
-  let studentClient: TestClient;
+  let botClient: ClawforgeYjsClient;
+  let studentClient: ClawforgeYjsClient;
   let port: number;
   let watchEvents: WatchEvent[];
   let unsubWatch: () => void;
@@ -346,20 +189,26 @@ describe("math-bot integration", () => {
     port = typeof addr === "object" && addr !== null ? addr.port : 0;
 
     // 2. Connect bot, wait for root sync, then request subspaces
-    botClient = createTestClient(port);
+    botClient = new ClawforgeYjsClient({
+      url: `ws://127.0.0.1:${port}`,
+      WebSocket: WebSocket as unknown as typeof globalThis.WebSocket,
+    });
     await botClient.synced;
-    botClient.syncSubspace("prompts");
-    botClient.syncSubspace("presence");
+    botClient.subspace("prompts");
+    botClient.subspace("presence");
     await new Promise((r) => setTimeout(r, 100));
 
     // 3. Register bot observer + presence
     startMathBot(botClient, "math-bot");
 
     // 4. Connect student, wait for root sync, then request subspaces
-    studentClient = createTestClient(port);
+    studentClient = new ClawforgeYjsClient({
+      url: `ws://127.0.0.1:${port}`,
+      WebSocket: WebSocket as unknown as typeof globalThis.WebSocket,
+    });
     await studentClient.synced;
-    studentClient.syncSubspace("prompts");
-    studentClient.syncSubspace("presence");
+    studentClient.subspace("prompts");
+    studentClient.subspace("presence");
     await new Promise((r) => setTimeout(r, 100));
 
     // 5. Register student presence

@@ -6,33 +6,43 @@ import * as syncProtocol from "y-protocols/sync";
 import * as encoding from "lib0/encoding";
 import * as decoding from "lib0/decoding";
 import { WebSocketServer, WebSocket } from "ws";
-import { setupYjsConnection, onWatch, type WatchEvent } from "../src/sync.js";
-
-const MSG_SYNC = 0;
+import {
+  setupYjsConnection,
+  onWatch,
+  type WatchEvent,
+  MSG_SYNC,
+  MSG_SUBSPACE_SYNC,
+  MSG_PERMISSION_ERROR,
+} from "../src/sync.js";
 
 // ---------------------------------------------------------------------------
-// Test client — minimal Yjs sync client (mirrors yjs-client.ts essentials)
+// Subspace-aware test client
 // ---------------------------------------------------------------------------
 
 interface TestClient {
   doc: Y.Doc;
+  subspaces: Map<string, Y.Doc>;
   ws: WebSocket;
   synced: Promise<void>;
   close: () => void;
+  /** Request sync for a subspace. Returns the local Y.Doc for it. */
+  syncSubspace: (name: string) => Y.Doc;
 }
 
 function createTestClient(port: number): TestClient {
   const doc = new Y.Doc();
+  const subspaces = new Map<string, Y.Doc>();
   const ws = new WebSocket(`ws://127.0.0.1:${port}`);
   ws.binaryType = "arraybuffer";
 
   let resolveSynced: () => void;
-  let isSynced = false;
+  let rootSynced = false;
   const synced = new Promise<void>((resolve) => {
     resolveSynced = resolve;
   });
 
   ws.on("open", () => {
+    // Send root doc syncStep1
     const encoder = encoding.createEncoder();
     encoding.writeVarUint(encoder, MSG_SYNC);
     syncProtocol.writeSyncStep1(encoder, doc);
@@ -44,56 +54,130 @@ function createTestClient(port: number): TestClient {
     const decoder = decoding.createDecoder(message);
     const messageType = decoding.readVarUint(decoder);
 
-    if (messageType === MSG_SYNC) {
-      const encoder = encoding.createEncoder();
-      encoding.writeVarUint(encoder, MSG_SYNC);
-      const syncMessageType = syncProtocol.readSyncMessage(
-        decoder,
-        encoder,
-        doc,
-        "remote",
-      );
-
-      if (syncMessageType === 1 && !isSynced) {
-        isSynced = true;
-        resolveSynced();
+    switch (messageType) {
+      case MSG_SYNC: {
+        const responseEncoder = encoding.createEncoder();
+        encoding.writeVarUint(responseEncoder, MSG_SYNC);
+        const syncType = syncProtocol.readSyncMessage(
+          decoder,
+          responseEncoder,
+          doc,
+          "remote",
+        );
+        if (syncType === 1 && !rootSynced) {
+          rootSynced = true;
+          resolveSynced();
+        }
+        if (encoding.length(responseEncoder) > 1) {
+          ws.send(encoding.toUint8Array(responseEncoder));
+        }
+        break;
       }
-
-      if (encoding.length(encoder) > 1) {
-        ws.send(encoding.toUint8Array(encoder));
+      case MSG_SUBSPACE_SYNC: {
+        const subspaceName = decoding.readVarString(decoder);
+        let isNew = false;
+        let subdoc = subspaces.get(subspaceName);
+        if (!subdoc) {
+          isNew = true;
+          subdoc = new Y.Doc();
+          subspaces.set(subspaceName, subdoc);
+          // Auto-forward local updates for this subspace to server
+          subdoc.on("update", (update: Uint8Array, origin: unknown) => {
+            if (origin === "remote") return;
+            if (ws.readyState !== WebSocket.OPEN) return;
+            const encoder = encoding.createEncoder();
+            encoding.writeVarUint(encoder, MSG_SUBSPACE_SYNC);
+            encoding.writeVarString(encoder, subspaceName);
+            syncProtocol.writeUpdate(encoder, update);
+            ws.send(encoding.toUint8Array(encoder));
+          });
+        }
+        const responseEncoder = encoding.createEncoder();
+        encoding.writeVarUint(responseEncoder, MSG_SUBSPACE_SYNC);
+        encoding.writeVarString(responseEncoder, subspaceName);
+        const beforeLen = encoding.length(responseEncoder);
+        syncProtocol.readSyncMessage(decoder, responseEncoder, subdoc, "remote");
+        if (encoding.length(responseEncoder) > beforeLen) {
+          ws.send(encoding.toUint8Array(responseEncoder));
+        }
+        // On first contact with a subspace, also send our own step1
+        // so the server replies with step2 containing the data we need
+        if (isNew) {
+          const step1Encoder = encoding.createEncoder();
+          encoding.writeVarUint(step1Encoder, MSG_SUBSPACE_SYNC);
+          encoding.writeVarString(step1Encoder, subspaceName);
+          syncProtocol.writeSyncStep1(step1Encoder, subdoc);
+          ws.send(encoding.toUint8Array(step1Encoder));
+        }
+        break;
+      }
+      case MSG_PERMISSION_ERROR: {
+        const payload = decoding.readVarString(decoder);
+        console.warn("[test-client] Permission error:", payload);
+        break;
       }
     }
   });
 
-  // Forward local updates to server
-  const onUpdate = (update: Uint8Array, origin: unknown) => {
+  // Forward local root doc updates to server
+  const onRootUpdate = (update: Uint8Array, origin: unknown) => {
     if (origin === "remote") return;
     if (ws.readyState !== WebSocket.OPEN) return;
-
     const encoder = encoding.createEncoder();
     encoding.writeVarUint(encoder, MSG_SYNC);
     syncProtocol.writeUpdate(encoder, update);
     ws.send(encoding.toUint8Array(encoder));
   };
-  doc.on("update", onUpdate);
+  doc.on("update", onRootUpdate);
+
+  /** Request sync for a subspace. Creates the local doc, sends step1,
+   *  and registers an update forwarder. */
+  const syncSubspace = (name: string): Y.Doc => {
+    let subdoc = subspaces.get(name);
+    if (subdoc) return subdoc;
+    subdoc = new Y.Doc();
+    subspaces.set(name, subdoc);
+    // Auto-forward local updates for this subspace
+    subdoc.on("update", (update: Uint8Array, origin: unknown) => {
+      if (origin === "remote") return;
+      if (ws.readyState !== WebSocket.OPEN) return;
+      const enc = encoding.createEncoder();
+      encoding.writeVarUint(enc, MSG_SUBSPACE_SYNC);
+      encoding.writeVarString(enc, name);
+      syncProtocol.writeUpdate(enc, update);
+      ws.send(encoding.toUint8Array(enc));
+    });
+    // Send step1 — server responds with step2 (the data)
+    const enc = encoding.createEncoder();
+    encoding.writeVarUint(enc, MSG_SUBSPACE_SYNC);
+    encoding.writeVarString(enc, name);
+    syncProtocol.writeSyncStep1(enc, subdoc);
+    ws.send(encoding.toUint8Array(enc));
+    return subdoc;
+  };
 
   const close = () => {
-    doc.off("update", onUpdate);
+    doc.off("update", onRootUpdate);
+    for (const subdoc of subspaces.values()) {
+      subdoc.destroy();
+    }
     ws.close();
   };
 
-  return { doc, ws, synced, close };
+  return { doc, subspaces, ws, synced, close, syncSubspace };
 }
 
 // ---------------------------------------------------------------------------
-// Math-bot — observes prompts, evaluates safe math, writes reply-to-array
+// Math-bot — observes prompts subspace, evaluates safe math, writes reply
 // ---------------------------------------------------------------------------
 
 const SAFE_MATH_RE = /^[\d+\-*/().%\s]+$/;
 
 function startMathBot(client: TestClient, botName: string): void {
-  const prompts: Y.Array<Y.Map<unknown>> = client.doc.getArray("prompts");
-  const presence: Y.Map<Y.Map<string>> = client.doc.getMap("presence");
+  const promptsDoc = client.subspaces.get("prompts")!;
+  const presenceDoc = client.subspaces.get("presence")!;
+  const prompts: Y.Array<Y.Map<unknown>> = promptsDoc.getArray("prompts");
+  const presence: Y.Map<Y.Map<string>> = presenceDoc.getMap("presence");
 
   // Register presence
   const inner = new Y.Map<string>();
@@ -169,16 +253,16 @@ function startMathBot(client: TestClient, botName: string): void {
 // ---------------------------------------------------------------------------
 
 function sendPrompt(
-  doc: Y.Doc,
+  promptsDoc: Y.Doc,
   text: string,
   target: string,
 ): { replyArray: Y.Array<string> } {
-  const prompts: Y.Array<Y.Map<unknown>> = doc.getArray("prompts");
+  const prompts: Y.Array<Y.Map<unknown>> = promptsDoc.getArray("prompts");
   const replyArray = new Y.Array<string>();
   const replyStream = new Y.Text();
 
   const promptMap = new Y.Map<unknown>();
-  doc.transact(() => {
+  promptsDoc.transact(() => {
     promptMap.set("prompt", text);
     promptMap.set("target", target);
     promptMap.set("reply-to-array", replyArray);
@@ -221,6 +305,11 @@ function waitForReply(
   });
 }
 
+// Explicit permissions for both bot and student:
+// - prompts:write — read/write prompts and replies
+// - presence:write — register and update presence
+const FULL_ACCESS = [":read", "prompts:write", "presence:write"];
+
 // ---------------------------------------------------------------------------
 // Test suite
 // ---------------------------------------------------------------------------
@@ -246,7 +335,7 @@ describe("math-bot integration", () => {
     wss = new WebSocketServer({ server: httpServer });
 
     wss.on("connection", (ws) => {
-      setupYjsConnection(ws, serverDoc);
+      setupYjsConnection(ws, serverDoc, FULL_ACCESS);
     });
 
     await new Promise<void>((resolve) => {
@@ -256,20 +345,26 @@ describe("math-bot integration", () => {
     const addr = httpServer.address();
     port = typeof addr === "object" && addr !== null ? addr.port : 0;
 
-    // 2. Connect bot and wait for sync
+    // 2. Connect bot, wait for root sync, then request subspaces
     botClient = createTestClient(port);
     await botClient.synced;
+    botClient.syncSubspace("prompts");
+    botClient.syncSubspace("presence");
+    await new Promise((r) => setTimeout(r, 100));
 
     // 3. Register bot observer + presence
     startMathBot(botClient, "math-bot");
 
-    // 4. Connect student and wait for sync
+    // 4. Connect student, wait for root sync, then request subspaces
     studentClient = createTestClient(port);
     await studentClient.synced;
+    studentClient.syncSubspace("prompts");
+    studentClient.syncSubspace("presence");
+    await new Promise((r) => setTimeout(r, 100));
 
     // 5. Register student presence
-    const presence: Y.Map<Y.Map<string>> =
-      studentClient.doc.getMap("presence");
+    const presenceDoc = studentClient.subspaces.get("presence")!;
+    const presence: Y.Map<Y.Map<string>> = presenceDoc.getMap("presence");
     const inner = new Y.Map<string>();
     inner.set("type", "user");
     inner.set("status", "waiting");
@@ -290,32 +385,36 @@ describe("math-bot integration", () => {
   });
 
   it("evaluates 2+2", async () => {
-    const { replyArray } = sendPrompt(studentClient.doc, "2+2", "math-bot");
+    const promptsDoc = studentClient.subspaces.get("prompts")!;
+    const { replyArray } = sendPrompt(promptsDoc, "2+2", "math-bot");
     const reply = await waitForReply(replyArray);
     assert.equal(reply, "2+2=4");
   });
 
   it("evaluates 10*5", async () => {
-    const { replyArray } = sendPrompt(studentClient.doc, "10*5", "math-bot");
+    const promptsDoc = studentClient.subspaces.get("prompts")!;
+    const { replyArray } = sendPrompt(promptsDoc, "10*5", "math-bot");
     const reply = await waitForReply(replyArray);
     assert.equal(reply, "10*5=50");
   });
 
   it("evaluates 100/4", async () => {
-    const { replyArray } = sendPrompt(studentClient.doc, "100/4", "math-bot");
+    const promptsDoc = studentClient.subspaces.get("prompts")!;
+    const { replyArray } = sendPrompt(promptsDoc, "100/4", "math-bot");
     const reply = await waitForReply(replyArray);
     assert.equal(reply, "100/4=25");
   });
 
   it("evaluates 7-3", async () => {
-    const { replyArray } = sendPrompt(studentClient.doc, "7-3", "math-bot");
+    const promptsDoc = studentClient.subspaces.get("prompts")!;
+    const { replyArray } = sendPrompt(promptsDoc, "7-3", "math-bot");
     const reply = await waitForReply(replyArray);
     assert.equal(reply, "7-3=4");
   });
 
   it("bot presence is visible to student", () => {
-    const presence: Y.Map<Y.Map<string>> =
-      studentClient.doc.getMap("presence");
+    const presenceDoc = studentClient.subspaces.get("presence")!;
+    const presence: Y.Map<Y.Map<string>> = presenceDoc.getMap("presence");
     const bot = presence.get("math-bot");
     assert.ok(bot, "math-bot presence should exist");
     assert.equal(bot.get("type"), "bot");
@@ -323,7 +422,8 @@ describe("math-bot integration", () => {
   });
 
   it("student presence is visible to bot", () => {
-    const presence: Y.Map<Y.Map<string>> = botClient.doc.getMap("presence");
+    const presenceDoc = botClient.subspaces.get("presence")!;
+    const presence: Y.Map<Y.Map<string>> = presenceDoc.getMap("presence");
     const student = presence.get("student");
     assert.ok(student, "student presence should exist");
     assert.equal(student.get("type"), "user");
@@ -332,7 +432,8 @@ describe("math-bot integration", () => {
 
   it("watcher fires 'New prompt added' on prompt insert", async () => {
     const before = watchEvents.length;
-    const { replyArray } = sendPrompt(studentClient.doc, "1+1", "math-bot");
+    const promptsDoc = studentClient.subspaces.get("prompts")!;
+    const { replyArray } = sendPrompt(promptsDoc, "1+1", "math-bot");
     await waitForReply(replyArray);
 
     const newEvents = watchEvents.slice(before);
@@ -343,7 +444,8 @@ describe("math-bot integration", () => {
 
   it("watcher fires 'Reply received' on reply-to-array insert", async () => {
     const before = watchEvents.length;
-    const { replyArray } = sendPrompt(studentClient.doc, "3+3", "math-bot");
+    const promptsDoc = studentClient.subspaces.get("prompts")!;
+    const { replyArray } = sendPrompt(promptsDoc, "3+3", "math-bot");
     await waitForReply(replyArray);
     // Allow server observer to process the reply sync
     await new Promise((r) => setTimeout(r, 100));
@@ -356,7 +458,8 @@ describe("math-bot integration", () => {
 
   it("watcher fires 'Status changed' on presence status update", async () => {
     const before = watchEvents.length;
-    const { replyArray } = sendPrompt(studentClient.doc, "5+5", "math-bot");
+    const promptsDoc = studentClient.subspaces.get("prompts")!;
+    const { replyArray } = sendPrompt(promptsDoc, "5+5", "math-bot");
     await waitForReply(replyArray);
 
     const newEvents = watchEvents.slice(before);

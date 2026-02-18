@@ -2,144 +2,23 @@ import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createServer, type Server as HttpServer } from "node:http";
 import * as Y from "yjs";
-import * as syncProtocol from "y-protocols/sync";
-import * as encoding from "lib0/encoding";
-import * as decoding from "lib0/decoding";
 import { WebSocketServer, WebSocket } from "ws";
-import {
-  setupYjsConnection,
-  MSG_SYNC,
-  MSG_SUBSPACE_SYNC,
-  MSG_PERMISSION_ERROR,
-} from "../src/sync.js";
+import { ClawforgeYjsClient, type PermissionError } from "@clawforge/yjs-client";
+import { setupYjsConnection } from "../src/sync.js";
 
-// ---------------------------------------------------------------------------
-// Subspace-aware test client
-// ---------------------------------------------------------------------------
-
-interface TestClient {
-  doc: Y.Doc;
-  subspaces: Map<string, Y.Doc>;
-  ws: WebSocket;
-  synced: Promise<void>;
-  permissionErrors: Array<{ error: string; subspaces: string[] }>;
-  close: () => void;
-  /** Request sync for a subspace. Creates local doc, sends step1, auto-forwards updates. */
-  syncSubspace: (name: string) => Y.Doc;
+/** Create a ClawforgeYjsClient connected to the test server. */
+function createClient(port: number): ClawforgeYjsClient {
+  return new ClawforgeYjsClient({
+    url: `ws://127.0.0.1:${port}`,
+    WebSocket: WebSocket as unknown as typeof globalThis.WebSocket,
+  });
 }
 
-function createTestClient(port: number): TestClient {
-  const doc = new Y.Doc();
-  const subspaces = new Map<string, Y.Doc>();
-  const permissionErrors: Array<{ error: string; subspaces: string[] }> = [];
-  const ws = new WebSocket(`ws://127.0.0.1:${port}`);
-  ws.binaryType = "arraybuffer";
-
-  let resolveSynced: () => void;
-  const synced = new Promise<void>((resolve) => {
-    resolveSynced = resolve;
-  });
-
-  let rootSynced = false;
-
-  ws.on("open", () => {
-    const encoder = encoding.createEncoder();
-    encoding.writeVarUint(encoder, MSG_SYNC);
-    syncProtocol.writeSyncStep1(encoder, doc);
-    ws.send(encoding.toUint8Array(encoder));
-  });
-
-  ws.on("message", (data: ArrayBuffer | Buffer) => {
-    const message = new Uint8Array(data as ArrayBuffer);
-    const decoder = decoding.createDecoder(message);
-    const messageType = decoding.readVarUint(decoder);
-
-    switch (messageType) {
-      case MSG_SYNC: {
-        const responseEncoder = encoding.createEncoder();
-        encoding.writeVarUint(responseEncoder, MSG_SYNC);
-        const syncType = syncProtocol.readSyncMessage(
-          decoder,
-          responseEncoder,
-          doc,
-          "remote",
-        );
-        if (syncType === 1 && !rootSynced) {
-          rootSynced = true;
-          resolveSynced();
-        }
-        if (encoding.length(responseEncoder) > 1) {
-          ws.send(encoding.toUint8Array(responseEncoder));
-        }
-        break;
-      }
-      case MSG_SUBSPACE_SYNC: {
-        const subspaceName = decoding.readVarString(decoder);
-        let subdoc = subspaces.get(subspaceName);
-        if (!subdoc) {
-          subdoc = new Y.Doc();
-          subspaces.set(subspaceName, subdoc);
-        }
-        const responseEncoder = encoding.createEncoder();
-        encoding.writeVarUint(responseEncoder, MSG_SUBSPACE_SYNC);
-        encoding.writeVarString(responseEncoder, subspaceName);
-        const beforeLen = encoding.length(responseEncoder);
-        syncProtocol.readSyncMessage(decoder, responseEncoder, subdoc, "remote");
-        if (encoding.length(responseEncoder) > beforeLen) {
-          ws.send(encoding.toUint8Array(responseEncoder));
-        }
-        break;
-      }
-      case MSG_PERMISSION_ERROR: {
-        const payload = decoding.readVarString(decoder);
-        permissionErrors.push(JSON.parse(payload));
-        break;
-      }
-    }
-  });
-
-  // Forward local root doc updates to server
-  const onRootUpdate = (update: Uint8Array, origin: unknown) => {
-    if (origin === "remote") return;
-    if (ws.readyState !== WebSocket.OPEN) return;
-    const encoder = encoding.createEncoder();
-    encoding.writeVarUint(encoder, MSG_SYNC);
-    syncProtocol.writeUpdate(encoder, update);
-    ws.send(encoding.toUint8Array(encoder));
-  };
-  doc.on("update", onRootUpdate);
-
-  const syncSubspace = (name: string): Y.Doc => {
-    let subdoc = subspaces.get(name);
-    if (subdoc) return subdoc;
-    subdoc = new Y.Doc();
-    subspaces.set(name, subdoc);
-    subdoc.on("update", (update: Uint8Array, origin: unknown) => {
-      if (origin === "remote") return;
-      if (ws.readyState !== WebSocket.OPEN) return;
-      const enc = encoding.createEncoder();
-      encoding.writeVarUint(enc, MSG_SUBSPACE_SYNC);
-      encoding.writeVarString(enc, name);
-      syncProtocol.writeUpdate(enc, update);
-      ws.send(encoding.toUint8Array(enc));
-    });
-    const enc = encoding.createEncoder();
-    encoding.writeVarUint(enc, MSG_SUBSPACE_SYNC);
-    encoding.writeVarString(enc, name);
-    syncProtocol.writeSyncStep1(enc, subdoc);
-    ws.send(encoding.toUint8Array(enc));
-    return subdoc;
-  };
-
-  const close = () => {
-    doc.off("update", onRootUpdate);
-    for (const subdoc of subspaces.values()) {
-      subdoc.destroy();
-    }
-    ws.close();
-  };
-
-  return { doc, subspaces, ws, synced, permissionErrors, close, syncSubspace };
+/** Collect permission errors from a client into an array. */
+function collectPermissionErrors(client: ClawforgeYjsClient): PermissionError[] {
+  const errors: PermissionError[] = [];
+  client.on("permissionError", (err) => errors.push(err));
+  return errors;
 }
 
 /** Wait for a condition with timeout */
@@ -198,14 +77,15 @@ describe("write enforcement", () => {
       setupYjsConnection(ws, serverDoc, [":read", "prompts:read"]);
     });
 
-    const client = createTestClient(port);
+    const client = createClient(port);
+    const permissionErrors = collectPermissionErrors(client);
     await client.synced;
 
     // Client-initiated subspace sync
-    client.syncSubspace("prompts");
+    client.subspace("prompts");
     await new Promise((r) => setTimeout(r, 100));
 
-    // Try to write to prompts subspace — the auto-forwarder in syncSubspace
+    // Try to write to prompts subspace — the auto-forwarder in subspace()
     // sends the update as MSG_SUBSPACE_SYNC with messageYjsUpdate, which the
     // server rejects for read-only connections.
     const subdoc = client.subspaces.get("prompts")!;
@@ -215,9 +95,9 @@ describe("write enforcement", () => {
     arr.push([map]);
 
     // Wait for permission error
-    await waitFor(() => client.permissionErrors.length > 0);
-    assert.equal(client.permissionErrors[0].error, "permission_denied");
-    assert.deepEqual(client.permissionErrors[0].subspaces, ["prompts"]);
+    await waitFor(() => permissionErrors.length > 0);
+    assert.equal(permissionErrors[0].error, "permission_denied");
+    assert.deepEqual(permissionErrors[0].subspaces, ["prompts"]);
 
     client.close();
   });
@@ -228,11 +108,12 @@ describe("write enforcement", () => {
       setupYjsConnection(ws, serverDoc, [":read", "prompts:write"]);
     });
 
-    const client = createTestClient(port);
+    const client = createClient(port);
+    const permissionErrors = collectPermissionErrors(client);
     await client.synced;
 
     // Client-initiated subspace sync (auto-forwards updates)
-    client.syncSubspace("prompts");
+    client.subspace("prompts");
     await new Promise((r) => setTimeout(r, 100));
 
     // Write to prompts subspace
@@ -244,7 +125,7 @@ describe("write enforcement", () => {
     await new Promise((r) => setTimeout(r, 200));
 
     // No permission errors
-    assert.equal(client.permissionErrors.length, 0);
+    assert.equal(permissionErrors.length, 0);
 
     client.close();
   });
@@ -290,14 +171,14 @@ describe("observe enforcement", () => {
       connectionIndex++;
     });
 
-    const writer = createTestClient(port);
+    const writer = createClient(port);
     await writer.synced;
-    writer.syncSubspace("prompts");
+    writer.subspace("prompts");
     await new Promise((r) => setTimeout(r, 100));
 
-    const observer = createTestClient(port);
+    const observer = createClient(port);
     await observer.synced;
-    observer.syncSubspace("prompts");
+    observer.subspace("prompts");
     await new Promise((r) => setTimeout(r, 100));
 
     // Writer writes data
@@ -335,14 +216,14 @@ describe("observe enforcement", () => {
       connectionIndex++;
     });
 
-    const writer = createTestClient(port);
+    const writer = createClient(port);
     await writer.synced;
-    writer.syncSubspace("prompts");
+    writer.subspace("prompts");
     await new Promise((r) => setTimeout(r, 100));
 
-    const reader = createTestClient(port);
+    const reader = createClient(port);
     await reader.synced;
-    reader.syncSubspace("prompts");
+    reader.subspace("prompts");
     await new Promise((r) => setTimeout(r, 100));
 
     // Writer writes data AFTER reader has synced
@@ -401,20 +282,21 @@ describe("read enforcement", () => {
       setupYjsConnection(ws, serverDoc, [":read", "prompts:read"]);
     });
 
-    const client = createTestClient(port);
+    const client = createClient(port);
+    const permissionErrors = collectPermissionErrors(client);
     await client.synced;
 
     // Request prompts (authorized) — should sync without error
-    client.syncSubspace("prompts");
+    client.subspace("prompts");
     await new Promise((r) => setTimeout(r, 100));
     assert.ok(client.subspaces.has("prompts"), "should have prompts subspace");
-    assert.equal(client.permissionErrors.length, 0);
+    assert.equal(permissionErrors.length, 0);
 
     // Request presence (unauthorized) — should get permission error
-    client.syncSubspace("presence");
-    await waitFor(() => client.permissionErrors.length > 0);
-    assert.equal(client.permissionErrors[0].error, "permission_denied");
-    assert.deepEqual(client.permissionErrors[0].subspaces, ["presence"]);
+    client.subspace("presence");
+    await waitFor(() => permissionErrors.length > 0);
+    assert.equal(permissionErrors[0].error, "permission_denied");
+    assert.deepEqual(permissionErrors[0].subspaces, ["presence"]);
 
     client.close();
   });
@@ -455,7 +337,8 @@ describe("stub auth default", () => {
       setupYjsConnection(ws, serverDoc);
     });
 
-    const client = createTestClient(port);
+    const client = createClient(port);
+    const permissionErrors = collectPermissionErrors(client);
     await client.synced;
 
     // Try to write to root doc — should be rejected
@@ -463,14 +346,14 @@ describe("stub auth default", () => {
     rootMap.set("key", "value");
 
     // Wait for permission error
-    await waitFor(() => client.permissionErrors.length > 0);
-    assert.equal(client.permissionErrors[0].error, "permission_denied");
+    await waitFor(() => permissionErrors.length > 0);
+    assert.equal(permissionErrors[0].error, "permission_denied");
 
     // Try to sync a subspace — should also be rejected
-    client.syncSubspace("prompts");
-    await waitFor(() => client.permissionErrors.length > 1);
-    assert.equal(client.permissionErrors[1].error, "permission_denied");
-    assert.deepEqual(client.permissionErrors[1].subspaces, ["prompts"]);
+    client.subspace("prompts");
+    await waitFor(() => permissionErrors.length > 1);
+    assert.equal(permissionErrors[1].error, "permission_denied");
+    assert.deepEqual(permissionErrors[1].subspaces, ["prompts"]);
 
     client.close();
   });

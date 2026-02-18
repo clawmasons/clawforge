@@ -1,0 +1,35 @@
+{
+  "name": "@clawforge/yjs-client",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "lib0": "^0.2.99",
+    "y-protocols": "^1.0.6",
+    "yjs": "^13.6.20"
+  },
+  "peerDependencies": {
+    "ws": "^8.18.0"
+  },
+  "peerDependenciesMeta": {
+    "ws": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.13",
+    "typescript": "^5.7.0"
+  }
+}

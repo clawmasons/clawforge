@@ -1,7 +1,6 @@
 # openclaw files
 bots/
-
-openspec/
+openspec
 .claude/commands/create-specs.md
 
 # ignore generated files for sdlc

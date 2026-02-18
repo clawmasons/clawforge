@@ -1,20 +1,44 @@
 # @clawforge/yjs-server
 
-WebSocket server for real-time collaboration using [Yjs](https://yjs.dev/). Handles document sync between clients, glob-pattern watchers for observing document changes, and file-based persistence.
+WebSocket server for real-time collaboration using [Yjs](https://yjs.dev/). Handles document sync between clients with subspace-scoped permissions, glob-pattern watchers for observing document changes, and file-based persistence.
 
 ## Architecture
 
 ```
 src/
   server.ts       — HTTP + WebSocket server, auth gating, graceful shutdown
-  sync.ts         — Yjs sync protocol, observeDeep watchers, watch-event hooks
+  sync.ts         — Yjs sync protocol, subspace routing, permission enforcement, watchers
   auth.ts         — Token authentication against the Clawforge API (stubbed)
+  permissions.ts  — Permission parsing, hierarchy expansion, authorization checks
   persistence.ts  — Debounced atomic file persistence for Y.Doc state
+```
+
+### Permissions (`permissions.ts`)
+
+Pure-logic module for subspace-level authorization. No I/O, independently testable.
+
+**Permission string format:** `<subspace>:<right>`
+
+- Root document: `:read` (empty subspace name)
+- Subspace: `prompts:write`, `presence:observe`, `internal.chat:read`
+
+**Rights hierarchy:** `write` > `observe` > `read`
+
+- `read` — receive initial subspace state on sync, no live updates
+- `observe` (implies `read`) — initial state + ongoing update broadcasts
+- `write` (implies `observe` + `read`) — full access: initial state, live updates, and can apply changes
+
+```ts
+import { parsePermission, buildPermissions, hasRight } from "./permissions.js";
+
+const perms = buildPermissions([":read", "prompts:write", "presence:observe"]);
+hasRight(perms, "prompts", "observe"); // true (write implies observe)
+hasRight(perms, "presence", "write");  // false (observe does not imply write)
 ```
 
 ### Server (`server.ts`)
 
-Runs an HTTP server that upgrades WebSocket connections after authentication. All clients share a single `Y.Doc` instance. Document state is persisted to disk via `FilePersistence`.
+Runs an HTTP server that upgrades WebSocket connections after authentication. Permissions from the auth result are threaded through to the sync layer.
 
 **Environment variables:**
 
@@ -26,13 +50,40 @@ Runs an HTTP server that upgrades WebSocket connections after authentication. Al
 | `DATA_DIR` | `/home/pn/data` | Directory for persistence files |
 | `PORT` | `1234` | WebSocket server port |
 
-### Sync & Watchers (`sync.ts`)
+### Auth (`auth.ts`)
 
-`setupYjsConnection(ws, doc)` handles the Yjs sync protocol (sync steps + update relay) and awareness message forwarding between clients.
+`authenticateProgram` returns an `AuthResult` with a `permissions: string[]` field. The stub returns `[":read"]` (root document read-only). Tests pass explicit permission sets to bypass the stub.
+
+### Sync & Subspaces (`sync.ts`)
+
+`setupYjsConnection(ws, doc, permissions?)` handles the Yjs sync protocol with subspace-scoped permission enforcement.
+
+#### Subspace model
+
+Memory is organized into subspaces, each backed by its own `Y.Doc`. Subspaces sync independently from the root document, making permission enforcement trivial — each subspace has its own sync handshake and update stream.
+
+**Lazy loading:** Subspaces are loaded on demand. The server only syncs the root document on connect. When a client wants a subspace, it sends `MSG_SUBSPACE_SYNC` step1; the server checks permissions and responds with step2 (the actual data).
+
+#### Wire format
+
+| Type | Value | Description |
+|---|---|---|
+| `MSG_SYNC` | 0 | Root document sync (unchanged from standard y-protocols) |
+| `MSG_AWARENESS` | 1 | Awareness messages (relayed to all clients) |
+| `MSG_SUBSPACE_SYNC` | 2 | Subspace sync: `[2][varstring: subspace name][sync protocol bytes]` |
+| `MSG_PERMISSION_ERROR` | 3 | Permission denied: `[3][varstring: JSON payload]` |
+
+Permission error payload: `{ "error": "permission_denied", "subspaces": ["prompts"] }`
+
+#### Permission enforcement
+
+- **Read:** client can only sync subspaces it has `read` permission for
+- **Write:** incoming `messageYjsUpdate` messages are checked against `write` permission; rejected writes produce `MSG_PERMISSION_ERROR`
+- **Observe:** update broadcasts are only relayed to connections with `observe` (or `write`) right on the subspace; `read`-only connections get initial state but no live updates
 
 #### Glob-pattern watchers
 
-The module defines path-pattern watchers that match against `observeDeep` change events:
+Path-pattern watchers match against `observeDeep` change events on both the root document and subspace documents:
 
 | Pattern | Message | Fires when |
 |---|---|---|
@@ -63,10 +114,6 @@ const unsubscribe = onWatch((event: WatchEvent) => {
 
 A default console-logging hook is registered at module load to preserve dev-server output.
 
-#### AbstractType handling
-
-When shared types arrive via remote sync, Yjs stores them as `AbstractType` in `doc.share`. `observeDeep` on `AbstractType` does not fire for direct (depth-0) changes. The `ensureDeepObservers` function detects this and converts to the proper typed version (`YArray`/`YMap`) using `doc.getArray()`/`doc.getMap()` before attaching observers. The correct type is inferred from watcher patterns.
-
 ### Persistence (`persistence.ts`)
 
 `FilePersistence` listens to doc updates and writes the full state to disk with a 1-second debounce. Writes are atomic (write to `.tmp`, then rename). Call `flush()` on shutdown to ensure pending state is saved.
@@ -87,7 +134,8 @@ pnpm build
 pnpm test
 ```
 
-Runs 10 integration tests using Node's built-in test runner:
+Runs 36 tests across 3 suites using Node's built-in test runner:
 
-- **Math-bot tests (6)** — Two clients (bot + student) connected via WebSocket. Student sends math expressions, bot evaluates and replies. Tests verify correct evaluation, reply delivery, and presence visibility across clients.
-- **Watcher tests (4)** — Verify that `observeDeep` watchers fire the correct `WatchEvent` for prompt inserts, reply inserts, status changes, and presence updates.
+- **Permission unit tests (20)** — `parsePermission` validation, `buildPermissions` hierarchy expansion and deduplication, `hasRight` hierarchy-implied checks
+- **Sync enforcement tests (6)** — Write rejection for read-only connections, write success for write connections, observe filtering (live updates vs read-only snapshot), read enforcement (authorized vs unauthorized subspaces), stub auth defaults
+- **Math-bot integration tests (10)** — Two clients (bot + student) connected via WebSocket with explicit permissions (`prompts:write`, `presence:write`). Student sends math expressions, bot evaluates and replies through subspace docs. Tests verify correct evaluation, reply delivery, presence visibility, and watcher events.

@@ -34,10 +34,10 @@ httpServer.on("upgrade", async (req, socket, head) => {
     const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
     const token = url.searchParams.get("token") ?? "";
 
-    await authenticateProgram(CLAWFORGE_API_URL, CLAWFORGE_TOKEN, token);
+    const authResult = await authenticateProgram(CLAWFORGE_API_URL, CLAWFORGE_TOKEN, token);
 
     wss.handleUpgrade(req, socket, head, (ws) => {
-      wss.emit("connection", ws, req);
+      wss.emit("connection", ws, req, authResult.permissions);
     });
   } catch (err) {
     console.error("[server] Auth failed:", err);
@@ -46,8 +46,8 @@ httpServer.on("upgrade", async (req, socket, head) => {
   }
 });
 
-wss.on("connection", (ws) => {
-  setupYjsConnection(ws, doc);
+wss.on("connection", (ws, _req, permissions?: string[]) => {
+  setupYjsConnection(ws, doc, permissions);
 });
 
 // Graceful shutdown

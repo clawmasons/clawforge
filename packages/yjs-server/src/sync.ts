@@ -189,6 +189,22 @@ export interface WatchEvent {
 
 export type WatchHook = (event: WatchEvent) => void;
 
+export interface TriggerBinding {
+  appSlug: string;
+  event: string;
+  path: string;
+}
+
+export interface TriggerContext {
+  triggerBindings?: TriggerBinding[];
+  onTrigger?: (payload: {
+    appSlug: string;
+    event: string;
+    path: string;
+    changedPath: string;
+  }) => void | Promise<void>;
+}
+
 const watchHooks = new Set<WatchHook>();
 
 export function onWatch(hook: WatchHook): () => void {
@@ -227,10 +243,46 @@ function logWatchMatches(fullPath: string, action: string, value: string): void 
   }
 }
 
+function normalizeTriggerPath(path: string): string {
+  const trimmed = path.trim();
+  return trimmed.replace(/^\/+/, "").replace(/\.+$/, "");
+}
+
+export function triggerPathMatches(
+  changedPath: string,
+  configuredPath: string,
+): boolean {
+  const triggerPath = normalizeTriggerPath(configuredPath);
+  if (!triggerPath) return false;
+  return changedPath.startsWith(triggerPath);
+}
+
+function emitTriggerMatches(
+  changedPath: string,
+  context?: TriggerContext,
+): void {
+  if (!context?.triggerBindings || context.triggerBindings.length === 0) return;
+
+  for (const binding of context.triggerBindings) {
+    if (binding.event !== "memory-update") continue;
+    if (!triggerPathMatches(changedPath, binding.path)) continue;
+    context.onTrigger?.({
+      appSlug: binding.appSlug,
+      event: binding.event,
+      path: binding.path,
+      changedPath,
+    });
+  }
+}
+
 /** Resolve a typed shared type from the doc.
  *  Types created via remote sync start as AbstractType;
  *  observeDeep only fires on the properly typed version. */
-function getTypedRoot(doc: Y.Doc, name: string, raw: Y.AbstractType<unknown>): Y.AbstractType<unknown> {
+function getTypedRoot(
+  doc: Y.Doc,
+  name: string,
+  raw: Y.AbstractType<any>,
+): Y.AbstractType<any> {
   if (raw instanceof Y.Map || raw instanceof Y.Array || raw instanceof Y.Text) {
     return raw;
   }
@@ -242,13 +294,17 @@ function getTypedRoot(doc: Y.Doc, name: string, raw: Y.AbstractType<unknown>): Y
   return isArray ? doc.getArray(name) : doc.getMap(name);
 }
 
-function ensureDeepObservers(doc: Y.Doc, observedRoots: Set<string>): void {
+function ensureDeepObservers(
+  doc: Y.Doc,
+  observedRoots: Set<string>,
+  triggerContext?: TriggerContext,
+): void {
   for (const [name, raw] of doc.share.entries()) {
     if (observedRoots.has(name)) continue;
     observedRoots.add(name);
 
     const type = getTypedRoot(doc, name, raw);
-    type.observeDeep((events: Y.YEvent<Y.AbstractType<unknown>>[]) => {
+    type.observeDeep((events: Y.YEvent<Y.AbstractType<any>>[]) => {
       for (const event of events) {
         const path = event.path;
         const pathStr = path.length === 0
@@ -276,11 +332,14 @@ function ensureDeepObservers(doc: Y.Doc, observedRoots: Set<string>): void {
                 // Fire for both container path and indexed item path
                 logWatchMatches(pathStr, "insert", val);
                 logWatchMatches(itemPath, "insert", val);
+                emitTriggerMatches(pathStr, triggerContext);
+                emitTriggerMatches(itemPath, triggerContext);
                 idx++;
               }
             }
             if (d.delete) {
               logWatchMatches(pathStr, "delete", `${d.delete} items`);
+              emitTriggerMatches(pathStr, triggerContext);
             }
           }
         }
@@ -290,6 +349,7 @@ function ensureDeepObservers(doc: Y.Doc, observedRoots: Set<string>): void {
           for (const [key, { action }] of event.changes.keys) {
             const newVal = (event.target as Y.Map<unknown>).get(key);
             logWatchMatches(`${pathStr}.${key}`, action, `-> ${formatValue(newVal)}`);
+            emitTriggerMatches(`${pathStr}.${key}`, triggerContext);
           }
         }
       }
@@ -309,6 +369,7 @@ export function setupYjsConnection(
   ws: WebSocket,
   doc: Y.Doc,
   permissionStrings?: string[],
+  triggerContext?: TriggerContext,
 ): void {
   const docState = getDocState(doc);
   const perms = buildPermissions(permissionStrings ?? [":read"]);
@@ -371,7 +432,7 @@ export function setupYjsConnection(
         }
 
         // Attach deep observers to any newly created root types
-        ensureDeepObservers(doc, getObservedRoots(doc));
+        ensureDeepObservers(doc, getObservedRoots(doc), triggerContext);
 
         if (encoding.length(responseEncoder) > beforeLen) {
           ws.send(encoding.toUint8Array(responseEncoder));
@@ -422,7 +483,7 @@ export function setupYjsConnection(
         }
 
         // Attach deep observers to subspace types
-        ensureDeepObservers(subdoc, getObservedRoots(subdoc));
+        ensureDeepObservers(subdoc, getObservedRoots(subdoc), triggerContext);
 
         if (encoding.length(responseEncoder) > beforeLen) {
           ws.send(encoding.toUint8Array(responseEncoder));

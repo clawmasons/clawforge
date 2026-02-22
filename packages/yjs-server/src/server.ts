@@ -5,6 +5,10 @@ import { WebSocketServer } from "ws";
 import { authenticateProgram } from "./auth.js";
 import { FilePersistence } from "./persistence.js";
 import { setupYjsConnection } from "./sync.js";
+import {
+  getSpaceAppTriggerMetadata,
+  onAppTriggerEvent,
+} from "./apps.js";
 
 const CLAWFORGE_API_URL = process.env.CLAWFORGE_API_URL ?? "http://localhost:4000";
 const CLAWFORGE_TOKEN = process.env.CLAWFORGE_TOKEN ?? "";
@@ -33,11 +37,24 @@ httpServer.on("upgrade", async (req, socket, head) => {
   try {
     const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
     const token = url.searchParams.get("token") ?? "";
+    const pathParts = url.pathname.split("/").filter(Boolean);
+    const orgSlug = pathParts[0] ?? "org";
+    const spaceSlug = pathParts[1] ?? "space";
 
     const authResult = await authenticateProgram(CLAWFORGE_API_URL, CLAWFORGE_TOKEN, token);
+    const triggerBindings = await getSpaceAppTriggerMetadata(
+      CLAWFORGE_API_URL,
+      CLAWFORGE_TOKEN,
+      orgSlug,
+      spaceSlug,
+    );
 
     wss.handleUpgrade(req, socket, head, (ws) => {
-      wss.emit("connection", ws, req, authResult.permissions);
+      wss.emit("connection", ws, req, authResult.permissions, {
+        orgSlug,
+        spaceSlug,
+        triggerBindings,
+      });
     });
   } catch (err) {
     console.error("[server] Auth failed:", err);
@@ -46,9 +63,34 @@ httpServer.on("upgrade", async (req, socket, head) => {
   }
 });
 
-wss.on("connection", (ws, _req, permissions?: string[]) => {
-  setupYjsConnection(ws, doc, permissions);
-});
+wss.on(
+  "connection",
+  (
+    ws,
+    _req,
+    permissions?: string[],
+    triggerMeta?: {
+      orgSlug: string;
+      spaceSlug: string;
+      triggerBindings: Awaited<ReturnType<typeof getSpaceAppTriggerMetadata>>;
+    },
+  ) => {
+    setupYjsConnection(ws, doc, permissions, {
+      triggerBindings: triggerMeta?.triggerBindings,
+      onTrigger: async (payload) => {
+        if (!triggerMeta) return;
+        await onAppTriggerEvent({
+          orgSlug: triggerMeta.orgSlug,
+          spaceSlug: triggerMeta.spaceSlug,
+          appSlug: payload.appSlug,
+          event: payload.event,
+          path: payload.path,
+          changedPath: payload.changedPath,
+        });
+      },
+    });
+  },
+);
 
 // Graceful shutdown
 function shutdown() {

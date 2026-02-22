@@ -43,6 +43,13 @@
       "when": 1771372800000,
       "tag": "0005_member_unique_constraint",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1771632000000,
+      "tag": "0006_space_apps",
+      "breakpoints": true
     }
   ]
 }

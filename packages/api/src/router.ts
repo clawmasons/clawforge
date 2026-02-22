@@ -4,7 +4,19 @@ import { randomUUID } from "crypto";
 import { TRPCError } from "@trpc/server";
 import { router, publicProcedure, protectedProcedure } from "./trpc.js";
 import { db } from "./db/index.js";
-import { organization, member, user, space, spaceMember, spaceTask, orgApiToken, bot, invitation } from "./db/schema.js";
+import {
+  organization,
+  member,
+  user,
+  space,
+  spaceMember,
+  spaceTask,
+  orgApiToken,
+  bot,
+  invitation,
+  app,
+  spaceApp,
+} from "./db/schema.js";
 import { generateApiToken } from "./lib/token.js";
 import { auth } from "./auth.js";
 
@@ -91,6 +103,211 @@ async function verifySpaceAdmin(userId: string, spaceId: string) {
 
 function generateSpaceId(): string {
   return `space-${randomUUID().slice(0, 8)}`;
+}
+
+type AppDefinition = {
+  setup: string;
+  role_definitions?: string;
+  tasks?: string;
+};
+
+type TaskTrigger = {
+  event: string;
+  path: string;
+};
+
+type AppTaskDefinition = {
+  name?: string;
+  enabled?: boolean;
+  owner?: string | null;
+  role?: string;
+  requiredRoles?: string[];
+  triggerEvents?: TaskTrigger[];
+};
+
+const DEFAULT_APP_SEEDS: Array<{
+  slug: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  navigation: string[];
+  subspacePath: string;
+  appDefinition: AppDefinition;
+  taskDefinitions: AppTaskDefinition[];
+}> = [
+  {
+    slug: "chat",
+    name: "Chat",
+    description: "Collaborative chat for a space.",
+    enabled: true,
+    navigation: ["chats"],
+    subspacePath: "private.chat",
+    appDefinition: {
+      role_definitions:
+        "Define conversation owners and moderators for this space app.",
+      tasks:
+        "Create moderation and summarization tasks for active chat channels.",
+      setup:
+        "Create default chat tasks for this space: moderation watcher and daily summary. Use required roles in taskDefinitions and generate task plan text from this prompt.",
+    },
+    taskDefinitions: [
+      {
+        name: "chat-daily-summary",
+        enabled: true,
+        requiredRoles: ["member"],
+        triggerEvents: [{ event: "memory-update", path: "chats" }],
+      },
+    ],
+  },
+  {
+    slug: "coding-agent",
+    name: "Coding Agent",
+    description: "Applies software changes for the space repository workflows.",
+    enabled: true,
+    navigation: ["memory/view", "memory-edit"],
+    subspacePath: "private.coding-agent",
+    appDefinition: {
+      role_definitions:
+        "Define reviewer and approver roles for code change execution.",
+      tasks:
+        "Create implementation, review, and validation tasks tied to repository activity.",
+      setup:
+        "Create default coding-agent tasks for this space: implementation planning and validation. Ensure tasks include trigger bindings and required roles.",
+    },
+    taskDefinitions: [
+      {
+        name: "coding-agent-plan",
+        enabled: true,
+        requiredRoles: ["admin", "owner"],
+        triggerEvents: [{ event: "memory-update", path: "memory" }],
+      },
+    ],
+  },
+];
+
+function safeParseJson<T>(raw: string, fallback: T): T {
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+async function ensureSeedAppsForOrg(organizationId: string) {
+  for (const seed of DEFAULT_APP_SEEDS) {
+    const existing = await db
+      .select({ id: app.id })
+      .from(app)
+      .where(
+        and(eq(app.organizationId, organizationId), eq(app.slug, seed.slug)),
+      )
+      .then((rows) => rows[0]);
+
+    if (existing) continue;
+
+    await db.insert(app).values({
+      id: randomUUID(),
+      organizationId,
+      name: seed.name,
+      slug: seed.slug,
+      description: seed.description,
+      enabled: seed.enabled,
+      navigation: JSON.stringify(seed.navigation),
+      subspacePath: seed.subspacePath,
+      appDefinition: JSON.stringify(seed.appDefinition),
+      taskDefinitions: JSON.stringify(seed.taskDefinitions),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+  }
+}
+
+async function resolveTaskOwner(
+  spaceId: string,
+  explicitOwner: string | null | undefined,
+  requiredRoles: string[],
+) {
+  if (explicitOwner) {
+    const explicitMember = await db
+      .select({ userId: spaceMember.userId })
+      .from(spaceMember)
+      .where(
+        and(eq(spaceMember.spaceId, spaceId), eq(spaceMember.userId, explicitOwner)),
+      )
+      .then((rows) => rows[0]);
+    if (explicitMember) return explicitMember.userId;
+  }
+
+  const members = await db
+    .select({ userId: spaceMember.userId, role: spaceMember.role })
+    .from(spaceMember)
+    .where(eq(spaceMember.spaceId, spaceId))
+    .orderBy(
+      sql`CASE ${spaceMember.role} WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END`,
+      sql`${spaceMember.createdAt} asc`,
+    );
+
+  if (requiredRoles.length === 0) {
+    return members[0]?.userId ?? null;
+  }
+
+  const match = members.find((m) => requiredRoles.includes(m.role));
+  return match?.userId ?? null;
+}
+
+async function installDefaultTasksForApp(input: {
+  spaceId: string;
+  appRow: {
+    id: string;
+    slug: string;
+    appDefinition: string;
+    taskDefinitions: string;
+  };
+}) {
+  const appDefinition = safeParseJson<AppDefinition>(input.appRow.appDefinition, {
+    setup: "",
+  });
+  const taskDefinitions = safeParseJson<AppTaskDefinition[]>(
+    input.appRow.taskDefinitions,
+    [],
+  );
+
+  for (let i = 0; i < taskDefinitions.length; i++) {
+    const def = taskDefinitions[i];
+    if (def.enabled === false) continue;
+
+    const requiredRoles = def.requiredRoles ?? [];
+    const ownerId = await resolveTaskOwner(input.spaceId, def.owner, requiredRoles);
+    if (!ownerId) continue;
+
+    const taskName = `${input.appRow.slug}-${def.name ?? `task-${i + 1}`}`;
+    const existing = await db
+      .select({ id: spaceTask.id })
+      .from(spaceTask)
+      .where(
+        and(eq(spaceTask.spaceId, input.spaceId), eq(spaceTask.name, taskName)),
+      )
+      .then((rows) => rows[0]);
+    if (existing) continue;
+
+    const triggers = (def.triggerEvents ?? []).map(
+      (t) => `${t.event}:${t.path}`,
+    );
+
+    await db.insert(spaceTask).values({
+      id: randomUUID(),
+      name: taskName,
+      spaceId: input.spaceId,
+      botId: null,
+      role: def.role ?? requiredRoles[0] ?? "member",
+      triggers: JSON.stringify(triggers.length > 0 ? triggers : ["memory-update:memory"]),
+      plan: appDefinition.setup,
+      state: "idle",
+      createdBy: ownerId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+  }
 }
 
 export const appRouter = router({
@@ -1166,6 +1383,266 @@ export const appRouter = router({
             .where(and(eq(spaceMember.spaceId, input.spaceId), eq(spaceMember.userId, input.userId)));
 
           return { ok: true as const };
+        }),
+    }),
+
+    apps: router({
+      catalog: protectedProcedure
+        .input(
+          z
+            .object({
+              spaceId: z.string().optional(),
+            })
+            .optional(),
+        )
+        .query(async ({ ctx, input }) => {
+          if (!ctx.session.activeOrganizationId) {
+            throw new TRPCError({
+              code: "UNAUTHORIZED",
+              message: "No active organization set.",
+            });
+          }
+
+          await verifyOrgMember(ctx.user.id, ctx.session.activeOrganizationId);
+          await ensureSeedAppsForOrg(ctx.session.activeOrganizationId);
+
+          if (input?.spaceId) {
+            const spaceRow = await db
+              .select({ id: space.id, organizationId: space.organizationId })
+              .from(space)
+              .where(eq(space.id, input.spaceId))
+              .then((rows) => rows[0]);
+            if (!spaceRow) {
+              throw new TRPCError({
+                code: "NOT_FOUND",
+                message: "Space not found.",
+              });
+            }
+            await verifyOrgMember(ctx.user.id, spaceRow.organizationId);
+          }
+
+          const rows = await db
+            .select({
+              id: app.id,
+              name: app.name,
+              slug: app.slug,
+              description: app.description,
+              enabled: app.enabled,
+              navigation: app.navigation,
+              subspacePath: app.subspacePath,
+              appDefinition: app.appDefinition,
+              taskDefinitions: app.taskDefinitions,
+            })
+            .from(app)
+            .where(eq(app.organizationId, ctx.session.activeOrganizationId))
+            .orderBy(sql`${app.name} asc`);
+
+          let installedByAppId = new Set<string>();
+          if (input?.spaceId) {
+            const installed = await db
+              .select({ appId: spaceApp.appId })
+              .from(spaceApp)
+              .where(eq(spaceApp.spaceId, input.spaceId));
+            installedByAppId = new Set(installed.map((r) => r.appId));
+          }
+
+          return rows.map((r) => ({
+            id: r.id,
+            name: r.name,
+            slug: r.slug,
+            description: r.description,
+            enabled: r.enabled,
+            navigation: safeParseJson<string[]>(r.navigation, []),
+            subspacePath: r.subspacePath,
+            appDefinition: safeParseJson<AppDefinition>(r.appDefinition, { setup: "" }),
+            taskDefinitions: safeParseJson<AppTaskDefinition[]>(r.taskDefinitions, []),
+            installed: installedByAppId.has(r.id),
+          }));
+        }),
+
+      listInstalled: protectedProcedure
+        .input(z.object({ spaceId: z.string() }))
+        .query(async ({ ctx, input }) => {
+          const spaceRow = await db
+            .select({ organizationId: space.organizationId })
+            .from(space)
+            .where(eq(space.id, input.spaceId))
+            .then((rows) => rows[0]);
+          if (!spaceRow) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Space not found." });
+          }
+
+          await verifyOrgMember(ctx.user.id, spaceRow.organizationId);
+          await ensureSeedAppsForOrg(spaceRow.organizationId);
+
+          const rows = await db
+            .select({
+              id: spaceApp.id,
+              installedAt: spaceApp.installedAt,
+              appId: app.id,
+              appName: app.name,
+              appSlug: app.slug,
+              description: app.description,
+              enabled: app.enabled,
+              navigation: app.navigation,
+              subspacePath: app.subspacePath,
+              appDefinition: app.appDefinition,
+              taskDefinitions: app.taskDefinitions,
+            })
+            .from(spaceApp)
+            .innerJoin(app, eq(spaceApp.appId, app.id))
+            .where(eq(spaceApp.spaceId, input.spaceId))
+            .orderBy(sql`${spaceApp.installedAt} desc`);
+
+          return rows.map((r) => ({
+            id: r.id,
+            installedAt: r.installedAt,
+            app: {
+              id: r.appId,
+              name: r.appName,
+              slug: r.appSlug,
+              description: r.description,
+              enabled: r.enabled,
+              navigation: safeParseJson<string[]>(r.navigation, []),
+              subspacePath: r.subspacePath,
+              appDefinition: safeParseJson<AppDefinition>(r.appDefinition, { setup: "" }),
+              taskDefinitions: safeParseJson<AppTaskDefinition[]>(r.taskDefinitions, []),
+            },
+          }));
+        }),
+
+      install: protectedProcedure
+        .input(
+          z.object({
+            spaceId: z.string(),
+            appId: z.string().optional(),
+            appSlug: z.string().optional(),
+          }),
+        )
+        .mutation(async ({ ctx, input }) => {
+          if (!input.appId && !input.appSlug) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Provide appId or appSlug.",
+            });
+          }
+
+          const auth = await verifySpaceAdmin(ctx.user.id, input.spaceId);
+          await ensureSeedAppsForOrg(auth.organizationId);
+
+          const appRow = await db
+            .select({
+              id: app.id,
+              slug: app.slug,
+              enabled: app.enabled,
+              organizationId: app.organizationId,
+              appDefinition: app.appDefinition,
+              taskDefinitions: app.taskDefinitions,
+            })
+            .from(app)
+            .where(
+              and(
+                eq(app.organizationId, auth.organizationId),
+                input.appId ? eq(app.id, input.appId) : eq(app.slug, input.appSlug!),
+              ),
+            )
+            .then((rows) => rows[0]);
+
+          if (!appRow) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "App not found." });
+          }
+          if (!appRow.enabled) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "App is disabled and cannot be installed.",
+            });
+          }
+
+          const existingInstall = await db
+            .select({ id: spaceApp.id })
+            .from(spaceApp)
+            .where(
+              and(
+                eq(spaceApp.spaceId, input.spaceId),
+                eq(spaceApp.appId, appRow.id),
+              ),
+            )
+            .then((rows) => rows[0]);
+
+          if (existingInstall) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "App is already installed in this space.",
+            });
+          }
+
+          const installId = randomUUID();
+          await db.insert(spaceApp).values({
+            id: installId,
+            spaceId: input.spaceId,
+            appId: appRow.id,
+            appSlug: appRow.slug,
+            installedBy: ctx.user.id,
+            installedAt: new Date(),
+          });
+
+          await installDefaultTasksForApp({
+            spaceId: input.spaceId,
+            appRow: {
+              id: appRow.id,
+              slug: appRow.slug,
+              appDefinition: appRow.appDefinition,
+              taskDefinitions: appRow.taskDefinitions,
+            },
+          });
+
+          return { id: installId, appId: appRow.id, appSlug: appRow.slug };
+        }),
+
+      uninstall: protectedProcedure
+        .input(
+          z.object({
+            spaceId: z.string(),
+            appId: z.string().optional(),
+            appSlug: z.string().optional(),
+          }),
+        )
+        .mutation(async ({ ctx, input }) => {
+          if (!input.appId && !input.appSlug) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Provide appId or appSlug.",
+            });
+          }
+
+          const auth = await verifySpaceAdmin(ctx.user.id, input.spaceId);
+
+          const install = await db
+            .select({
+              id: spaceApp.id,
+              appId: spaceApp.appId,
+              appSlug: spaceApp.appSlug,
+              appOrgId: app.organizationId,
+            })
+            .from(spaceApp)
+            .innerJoin(app, eq(spaceApp.appId, app.id))
+            .where(
+              and(
+                eq(spaceApp.spaceId, input.spaceId),
+                input.appId ? eq(spaceApp.appId, input.appId) : eq(spaceApp.appSlug, input.appSlug!),
+              ),
+            )
+            .then((rows) => rows[0]);
+
+          if (!install || install.appOrgId !== auth.organizationId) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "App install not found in this space.",
+            });
+          }
+
+          await db.delete(spaceApp).where(eq(spaceApp.id, install.id));
+          return { ok: true as const, appId: install.appId, appSlug: install.appSlug };
         }),
     }),
   }),

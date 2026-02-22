@@ -698,3 +698,191 @@ describe("invitations.resend", () => {
     ).rejects.toThrow(/Failed to create/);
   });
 });
+
+describe("spaces.apps.catalog", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    queryResults = [];
+    queryIndex = 0;
+  });
+
+  it("seeds default apps when missing", async () => {
+    const caller = createCaller(testUser, "org-1");
+    queryResults = [
+      [{ id: "member-1" }],
+      [],
+      [],
+      [{ id: "space-1", organizationId: "org-1" }],
+      [{ id: "member-1" }],
+      [{
+        id: "app-chat",
+        name: "Chat",
+        slug: "chat",
+        description: "desc",
+        enabled: true,
+        navigation: JSON.stringify(["chats"]),
+        subspacePath: "private.chat",
+        appDefinition: JSON.stringify({ setup: "setup" }),
+        taskDefinitions: JSON.stringify([]),
+      }],
+    ];
+
+    await caller.spaces.apps.catalog({ spaceId: "space-1" });
+    expect(mockInsert).toHaveBeenCalledTimes(2);
+    const insertedSubspacePaths = mockValues.mock.calls
+      .map(([v]) => (v as { subspacePath?: string }).subspacePath)
+      .filter((v): v is string => typeof v === "string");
+    expect(new Set(insertedSubspacePaths).size).toBe(insertedSubspacePaths.length);
+  });
+
+  it("does not reseed defaults when apps already exist", async () => {
+    const caller = createCaller(testUser, "org-1");
+    queryResults = [
+      [{ id: "member-1" }],
+      [{ id: "app-chat" }],
+      [{ id: "app-coding-agent" }],
+      [{ id: "space-1", organizationId: "org-1" }],
+      [{ id: "member-1" }],
+      [{
+        id: "app-chat",
+        name: "Chat",
+        slug: "chat",
+        description: "desc",
+        enabled: true,
+        navigation: JSON.stringify(["chats"]),
+        subspacePath: "private.chat",
+        appDefinition: JSON.stringify({ setup: "setup" }),
+        taskDefinitions: JSON.stringify([]),
+      }],
+    ];
+
+    await caller.spaces.apps.catalog({ spaceId: "space-1" });
+    expect(mockInsert).not.toHaveBeenCalled();
+  });
+});
+
+describe("spaces.apps.install", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    queryResults = [];
+    queryIndex = 0;
+  });
+
+  it("rejects install for non-admin space member", async () => {
+    const caller = createCaller(testUser, "org-1");
+    queryResults = [
+      [{ organizationId: "org-1" }],
+      [{ role: "member" }],
+      [{ role: "member" }],
+    ];
+
+    await expect(
+      caller.spaces.apps.install({ spaceId: "space-1", appSlug: "chat" }),
+    ).rejects.toThrow(/space admins and owners/i);
+  });
+
+  it("creates install and default task using fallback owner and trigger metadata", async () => {
+    const caller = createCaller(testUser, "org-1");
+    queryResults = [
+      [{ organizationId: "org-1" }],
+      [{ role: "admin" }],
+      [{ id: "seed-chat" }],
+      [{ id: "seed-coding-agent" }],
+      [{
+        id: "app-chat",
+        slug: "chat",
+        enabled: true,
+        organizationId: "org-1",
+        appDefinition: JSON.stringify({ setup: "setup prompt" }),
+        taskDefinitions: JSON.stringify([
+          {
+            name: "triage",
+            enabled: true,
+            requiredRoles: ["member"],
+            triggerEvents: [{ event: "memory-update", path: "memory" }],
+          },
+        ]),
+      }],
+      [],
+      [{ userId: "member-1", role: "member" }],
+      [],
+    ];
+
+    const result = await caller.spaces.apps.install({
+      spaceId: "space-1",
+      appSlug: "chat",
+    });
+
+    expect(result.appSlug).toBe("chat");
+    expect(
+      mockValues.mock.calls.some(
+        ([v]) =>
+          typeof v === "object" &&
+          v !== null &&
+          "spaceId" in (v as Record<string, unknown>) &&
+          (v as Record<string, unknown>).spaceId === "space-1" &&
+          (v as Record<string, unknown>).appId === "app-chat",
+      ),
+    ).toBe(true);
+    expect(
+      mockValues.mock.calls.some(
+        ([v]) =>
+          typeof v === "object" &&
+          v !== null &&
+          "name" in (v as Record<string, unknown>) &&
+          (v as Record<string, unknown>).name === "chat-triage" &&
+          (v as Record<string, unknown>).createdBy === "member-1" &&
+          (v as Record<string, unknown>).plan === "setup prompt" &&
+          (v as Record<string, unknown>).triggers ===
+            JSON.stringify(["memory-update:memory"]),
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("spaces.apps.uninstall", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    queryResults = [];
+    queryIndex = 0;
+  });
+
+  it("uninstalls app from a space for admin", async () => {
+    const caller = createCaller(testUser, "org-1");
+    queryResults = [
+      [{ organizationId: "org-1" }],
+      [{ role: "admin" }],
+      [{
+        id: "install-1",
+        appId: "app-chat",
+        appSlug: "chat",
+        appOrgId: "org-1",
+      }],
+    ];
+
+    const result = await caller.spaces.apps.uninstall({
+      spaceId: "space-1",
+      appSlug: "chat",
+    });
+    expect(result).toEqual({ ok: true, appId: "app-chat", appSlug: "chat" });
+    expect(mockDelete).toHaveBeenCalled();
+  });
+
+  it("rejects uninstall when install belongs to a different organization", async () => {
+    const caller = createCaller(testUser, "org-1");
+    queryResults = [
+      [{ organizationId: "org-1" }],
+      [{ role: "admin" }],
+      [{
+        id: "install-1",
+        appId: "app-chat",
+        appSlug: "chat",
+        appOrgId: "org-2",
+      }],
+    ];
+
+    await expect(
+      caller.spaces.apps.uninstall({ spaceId: "space-1", appSlug: "chat" }),
+    ).rejects.toThrow(/not found/i);
+  });
+});

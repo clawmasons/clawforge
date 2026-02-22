@@ -202,6 +202,40 @@ export const bot = pgTable(
   ],
 );
 
+export const app = pgTable(
+  "app",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
+    description: text("description"),
+    enabled: boolean("enabled").default(true).notNull(),
+    navigation: text("navigation").notNull().default("[]"),
+    subspacePath: text("subspace_path").notNull(),
+    appDefinition: text("app_definition").notNull(),
+    taskDefinitions: text("task_definitions").notNull().default("[]"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("app_organizationId_idx").on(table.organizationId),
+    uniqueIndex("app_slug_organizationId_uidx").on(
+      table.slug,
+      table.organizationId,
+    ),
+    uniqueIndex("app_subspacePath_organizationId_uidx").on(
+      table.subspacePath,
+      table.organizationId,
+    ),
+  ],
+);
+
 export const spaceMember = pgTable(
   "space_member",
   {
@@ -221,6 +255,33 @@ export const spaceMember = pgTable(
     uniqueIndex("space_member_spaceId_userId_uidx").on(
       table.spaceId,
       table.userId,
+    ),
+  ],
+);
+
+export const spaceApp = pgTable(
+  "space_app",
+  {
+    id: text("id").primaryKey(),
+    spaceId: text("space_id")
+      .notNull()
+      .references(() => space.id, { onDelete: "cascade" }),
+    appId: text("app_id")
+      .notNull()
+      .references(() => app.id, { onDelete: "cascade" }),
+    appSlug: text("app_slug").notNull(),
+    installedBy: text("installed_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    installedAt: timestamp("installed_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("space_app_spaceId_idx").on(table.spaceId),
+    index("space_app_appId_idx").on(table.appId),
+    uniqueIndex("space_app_spaceId_appId_uidx").on(table.spaceId, table.appId),
+    uniqueIndex("space_app_spaceId_appSlug_uidx").on(
+      table.spaceId,
+      table.appSlug,
     ),
   ],
 );
@@ -287,6 +348,7 @@ export const userRelations = relations(user, ({ many }) => ({
   invitations: many(invitation),
   bots: many(bot),
   spaceMemberships: many(spaceMember),
+  appInstalls: many(spaceApp),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -315,6 +377,7 @@ export const spaceRelations = relations(space, ({ one, many }) => ({
   members: many(spaceMember),
   bots: many(bot),
   tasks: many(spaceTask),
+  apps: many(spaceApp),
 }));
 
 export const organizationRelations = relations(organization, ({ many }) => ({
@@ -323,6 +386,7 @@ export const organizationRelations = relations(organization, ({ many }) => ({
   spaces: many(space),
   apiTokens: many(orgApiToken),
   bots: many(bot),
+  apps: many(app),
 }));
 
 export const memberRelations = relations(member, ({ one }) => ({
@@ -373,6 +437,14 @@ export const botRelations = relations(bot, ({ one }) => ({
   }),
 }));
 
+export const appRelations = relations(app, ({ one, many }) => ({
+  organization: one(organization, {
+    fields: [app.organizationId],
+    references: [organization.id],
+  }),
+  installs: many(spaceApp),
+}));
+
 export const spaceMemberRelations = relations(spaceMember, ({ one }) => ({
   space: one(space, {
     fields: [spaceMember.spaceId],
@@ -380,6 +452,21 @@ export const spaceMemberRelations = relations(spaceMember, ({ one }) => ({
   }),
   user: one(user, {
     fields: [spaceMember.userId],
+    references: [user.id],
+  }),
+}));
+
+export const spaceAppRelations = relations(spaceApp, ({ one }) => ({
+  space: one(space, {
+    fields: [spaceApp.spaceId],
+    references: [space.id],
+  }),
+  app: one(app, {
+    fields: [spaceApp.appId],
+    references: [app.id],
+  }),
+  installer: one(user, {
+    fields: [spaceApp.installedBy],
     references: [user.id],
   }),
 }));

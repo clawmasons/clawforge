@@ -1,4 +1,4 @@
-# @clawforge/yjs-server
+# @clawforge/space-server
 
 WebSocket server for real-time collaboration using [Yjs](https://yjs.dev/). Handles document sync between clients with subspace-scoped permissions, glob-pattern watchers for observing document changes, and file-based persistence.
 
@@ -99,7 +99,7 @@ Patterns use glob syntax: `*` matches a single path segment, `**` matches any de
 Watchers fire `WatchEvent` objects through a hook system instead of logging directly. This makes the watchers testable and extensible.
 
 ```ts
-import { onWatch, type WatchEvent } from "@clawforge/yjs-server/sync";
+import { onWatch, type WatchEvent } from "@clawforge/space-server/sync";
 
 const unsubscribe = onWatch((event: WatchEvent) => {
   // event.path    — "prompts[0].reply-to-array"

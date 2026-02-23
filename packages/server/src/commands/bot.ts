@@ -189,10 +189,10 @@ export function registerBotCommand(program: Command) {
           console.log("Merged yjs-plugin config into openclaw.json");
         }
 
-        // Start the gateway and yjs-server
+        // Start the gateway and space-server
         if (fs.existsSync(composePath)) {
-          console.log(`Starting openclaw-gateway and yjs-server...`);
-          run("docker compose up -d openclaw-gateway yjs-server", { cwd: botDir });
+          console.log(`Starting openclaw-gateway and space-server...`);
+          run("docker compose up -d openclaw-gateway space-server", { cwd: botDir });
         } else {
           console.log(
             `No docker-compose.yml found in bot dir — skipping container start`,

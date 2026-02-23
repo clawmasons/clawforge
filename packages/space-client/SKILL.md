@@ -1,13 +1,13 @@
-# How to use @clawforge/yjs-client
+# How to use @clawforge/space-client
 
-You are writing TypeScript that connects to a ClawForge yjs-server over WebSocket. Use the `@clawforge/yjs-client` package. It handles the custom wire protocol, sync handshakes, and update forwarding automatically.
+You are writing TypeScript that connects to a ClawForge space-server over WebSocket. Use the `@clawforge/space-client` package. It handles the custom wire protocol, sync handshakes, and update forwarding automatically.
 
 ## Install
 
-The package lives in the monorepo at `packages/yjs-client`. Add it as a dependency from any other workspace package:
+The package lives in the monorepo at `packages/space-client`. Add it as a dependency from any other workspace package:
 
 ```json
-{ "dependencies": { "@clawforge/yjs-client": "workspace:*" } }
+{ "dependencies": { "@clawforge/space-client": "workspace:*" } }
 ```
 
 Then run `pnpm install` at the monorepo root.
@@ -15,9 +15,9 @@ Then run `pnpm install` at the monorepo root.
 ## Imports
 
 ```ts
-import { ClawforgeYjsClient } from "@clawforge/yjs-client";
+import { ClawforgeYjsClient } from "@clawforge/space-client";
 // Optional — only needed if you inspect error payloads or event types:
-import type { PermissionError, ClawforgeYjsClientOptions, ClawforgeYjsClientEvents } from "@clawforge/yjs-client";
+import type { PermissionError, ClawforgeYjsClientOptions, ClawforgeYjsClientEvents } from "@clawforge/space-client";
 ```
 
 In Node.js you also need the `ws` package:
@@ -202,7 +202,7 @@ client.close();
 ```ts
 import * as Y from "yjs";
 import { WebSocket } from "ws";
-import { ClawforgeYjsClient } from "@clawforge/yjs-client";
+import { ClawforgeYjsClient } from "@clawforge/space-client";
 
 const client = new ClawforgeYjsClient({
   url: "ws://localhost:4444",

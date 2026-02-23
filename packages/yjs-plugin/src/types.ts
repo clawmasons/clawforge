@@ -1,6 +1,6 @@
 /** Plugin configuration read from environment variables */
 export interface YjsPluginConfig {
-  /** WebSocket URL for the yjs-server (e.g. ws://yjs-server:1234) */
+  /** WebSocket URL for the space-server (e.g. ws://space-server:1234) */
   host: string;
   /** Optional auth token */
   token?: string;

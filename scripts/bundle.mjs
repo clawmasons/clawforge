@@ -17,11 +17,11 @@ const { build } = require("esbuild");
 rmSync(bundleDir, { recursive: true, force: true });
 mkdirSync(bundleDir, { recursive: true });
 
-// ── Bundle yjs-server into infra dir (before copying infra/bot) ──────
-console.log("Bundling yjs-server with esbuild...");
+// ── Bundle space-server into infra dir (before copying infra/bot) ────
+console.log("Bundling space-server with esbuild...");
 await build({
-  entryPoints: [join(repoRoot, "packages/yjs-server/src/server.ts")],
-  outfile: join(repoRoot, "infra/bot/common/docker/yjs/yjs-server.js"),
+  entryPoints: [join(repoRoot, "packages/space-server/src/server.ts")],
+  outfile: join(repoRoot, "infra/bot/common/docker/space/space-server.js"),
   bundle: true,
   platform: "node",
   format: "esm",

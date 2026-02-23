@@ -1,5 +1,5 @@
 /**
- * Subspace-level permission model for yjs-server.
+ * Subspace-level permission model for space-server.
  *
  * Permission string format: "<subspace>:<right>"
  *   - Root document: ":read" (empty subspace name)

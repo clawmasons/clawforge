@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createServer, type Server as HttpServer } from "node:http";
 import * as Y from "yjs";
 import { WebSocketServer, WebSocket } from "ws";
-import { ClawforgeYjsClient, type PermissionError } from "@clawforge/yjs-client";
+import { ClawforgeYjsClient, type PermissionError } from "@clawforge/space-client";
 import { setupYjsConnection } from "../src/sync.js";
 
 /** Create a ClawforgeYjsClient connected to the test server. */

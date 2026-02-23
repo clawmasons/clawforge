@@ -1,13 +1,13 @@
-# @clawforge/yjs-client
+# @clawforge/space-client
 
-TypeScript client for the ClawForge yjs-server. Handles the full WebSocket connection lifecycle: root document sync, lazy subspace sync, awareness relay, permission error events, and optional reconnection with exponential backoff.
+TypeScript client for the ClawForge space-server. Handles the full WebSocket connection lifecycle: root document sync, lazy subspace sync, awareness relay, permission error events, and optional reconnection with exponential backoff.
 
 Works in both browser (native WebSocket) and Node.js (`ws`) environments.
 
 ## Usage
 
 ```ts
-import { ClawforgeYjsClient } from "@clawforge/yjs-client";
+import { ClawforgeYjsClient } from "@clawforge/space-client";
 
 const client = new ClawforgeYjsClient({
   url: "ws://localhost:4444",
@@ -48,9 +48,9 @@ pnpm clean    # removes dist/
 
 ## Tests
 
-This package has no tests of its own. It is tested via the `@clawforge/yjs-server` test suite, which imports it as a dev dependency. To run those tests:
+This package has no tests of its own. It is tested via the `@clawforge/space-server` test suite, which imports it as a dev dependency. To run those tests:
 
 ```bash
-cd ../yjs-server
+cd ../space-server
 pnpm test
 ```

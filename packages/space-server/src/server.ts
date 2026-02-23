@@ -27,7 +27,7 @@ persistence.load();
 // HTTP server
 const httpServer = createServer((_req, res) => {
   res.writeHead(200, { "Content-Type": "text/plain" });
-  res.end("yjs-server ok\n");
+  res.end("space-server ok\n");
 });
 
 // WebSocket server (noServer mode for auth)
@@ -104,6 +104,6 @@ process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
 
 httpServer.listen(PORT, () => {
-  console.log(`[server] yjs-server listening on port ${PORT}`);
+  console.log(`[server] space-server listening on port ${PORT}`);
   console.log(`[server] Program: ${PROGRAM_ID}, data file: ${dataFile}`);
 });

@@ -1,5 +1,5 @@
 {
-  "name": "@clawforge/yjs-server",
+  "name": "@clawforge/space-server",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -16,7 +16,7 @@
     "yjs": "^13.6.20"
   },
   "devDependencies": {
-    "@clawforge/yjs-client": "workspace:*",
+    "@clawforge/space-client": "workspace:*",
     "@types/node": "^22.0.0",
     "@types/ws": "^8.5.13",
     "tsx": "^4.19.0",

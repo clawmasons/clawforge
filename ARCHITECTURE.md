@@ -20,7 +20,7 @@ Clawforge is a full-stack TypeScript monorepo. The frontend communicates with th
 │         tRPC w/ creds)                                               │
 │                                                                      │
 │  ┌──────────────────┐    ┌─────────────┐    ┌────────────────────┐   │
-│  │ OpenClaw Gateway │◄──▶│ Yjs Server  │◄──▶│  SPA / Browser     │   │
+│  │ OpenClaw Gateway │◄──▶│Space Server │◄──▶│  SPA / Browser     │   │
 │  │  :18789          │    │  :1234      │    │  (Yjs peer)        │   │
 │  │  (yjs-plugin)    │    │  (Y.Doc)    │    │                    │   │
 │  └──────────────────┘    └─────────────┘    └────────────────────┘   │
@@ -53,7 +53,7 @@ Next.js 15 App Router with React 19, tRPC React Query for data fetching, and Tai
 
 Globally-installable CLI (`clawforge` command) built with Commander.js. Used for running clawforge clawbots locally. Compose files for the org server live at `infra/clawforge-server/` and are referenced at runtime via path resolution.
 
-### `packages/yjs-server` — Real-Time Document Server
+### `packages/space-server` — Real-Time Document Server
 
 WebSocket server that hosts a shared `Y.Doc` for real-time collaboration between bots and browser clients. Handles the Yjs sync protocol, broadcasts updates to all connected peers, and persists document state to disk (debounced atomic writes). Auth is token-based via query parameter.
 
@@ -63,7 +63,7 @@ Bridges the shared `Y.Doc` to the OpenClaw bot runtime as a channel plugin. Obse
 
 ### `infra/bot/common` — Bot Infrastructure
 
-Docker and scripts for running OpenClaw bots locally. Includes the OpenClaw Dockerfile, yjs-server Dockerfile, a bot-specific docker-compose, skills for bot-generated apps, and helper scripts (e.g. `extract-home.sh`).
+Docker and scripts for running OpenClaw bots locally. Includes the OpenClaw Dockerfile, space-server Dockerfile, a bot-specific docker-compose, skills for bot-generated apps, and helper scripts (e.g. `extract-home.sh`).
 
 ## Local Development Infrastructure
 
@@ -98,7 +98,7 @@ Browser                     Web (:3000)                API (:4000)              
 
 ## Real-Time Collaboration (Yjs)
 
-Bots and browser clients communicate through a shared Yjs document hosted by the yjs-server. Both sides are Yjs peers — there is no request/response API, just a synchronized CRDT document.
+Bots and browser clients communicate through a shared Yjs document hosted by the space-server. Both sides are Yjs peers — there is no request/response API, just a synchronized CRDT document.
 
 **Shared Y.Doc structure:**
 
@@ -108,7 +108,7 @@ Bots and browser clients communicate through a shared Yjs document hosted by the
 **Data flow:**
 
 ```
-Browser/SPA                      Yjs Server                    OpenClaw + yjs-plugin
+Browser/SPA                     Space Server                   OpenClaw + yjs-plugin
     │                               │                                │
     │── append prompt Y.Map ──────▶ │ ── broadcast ────────────────▶ │
     │                               │                                │── bot processes prompt
@@ -121,10 +121,10 @@ Browser/SPA                      Yjs Server                    OpenClaw + yjs-pl
 ```
 
 **Key files:**
-- `packages/yjs-server/src/server.ts` — WebSocket server, sync protocol, persistence
+- `packages/space-server/src/server.ts` — WebSocket server, sync protocol, persistence
 - `packages/yjs-plugin/src/channel.ts` — prompt observation, response writing, presence management
 - `packages/yjs-plugin/src/index.ts` — plugin registration, lifecycle (start/stop)
-- `infra/bot/common/skills/yjs-app/SKILL.md` — full protocol spec for SPA developers
+- `infra/bot/common/skills/space-app/SKILL.md` — full protocol spec for SPA developers
 
 ## Type Safety Flow
 

@@ -12,7 +12,7 @@ Apps are scoped to a program and can be accessed by navigating to your program o
 ## Architecture
 
 ```
-SPA (browser)              yjs-server (ws://...)           clawbot (yjs-plugin)
+SPA (browser)              space-server (ws://...)           clawbot (yjs-plugin)
 ─────────────              ────────────────────            ────────────────────
 Connect via WebSocket ───► Shared Y.Doc ◄──────────────── Observes Y.Doc
 Append Y.Map to            Syncs all peers                Reads new prompts
@@ -20,25 +20,25 @@ Append Y.Map to            Syncs all peers                Reads new prompts
 Observe reply-to-stream/array
 
 The SPA and the bot are both Yjs peers connected to the same document hosted
-by the yjs-server. Communication happens through two shared types on the Y.Doc:
+by the space-server. Communication happens through two shared types on the Y.Doc:
 
 - prompts (Y.Array<Y.Map>) — the prompt queue
 - presence (Y.Map<Y.Map>) — per-entity presence tracking
 ```
 
-## The yjs-app Skill
+## The space-app Skill
 
-Apps are built using the **yjs-app** skill, defined in the SKILL.md file. When a bot has this skill, it automatically:
+Apps are built using the **space-app** skill, defined in the SKILL.md file. When a bot has this skill, it automatically:
 
-1. Connects to the yjs-server via WebSocket with token authentication
+1. Connects to the space-server via WebSocket with token authentication
 2. Observes the prompts array for new messages targeting it
 3. Streams response chunks into reply-to-stream (Y.Text)
 4. Pushes the final response into reply-to-array (Y.Array)
 5. Manages its own presence (waiting / thinking / offline)
 
-## The yjs-server
+## The Space Server
 
-The yjs-server is a lightweight WebSocket server that hosts the shared Y.Doc. It:
+The space-server is a lightweight WebSocket server that hosts the shared Y.Doc. It:
 
 - Authenticates connections via a token query parameter
 - Syncs all peers using the Yjs sync protocol
@@ -50,7 +50,7 @@ The yjs-server is a lightweight WebSocket server that hosts the shared Y.Doc. It
 
 The yjs-plugin is the bot-side counterpart. It:
 
-- Connects to the yjs-server with exponential backoff reconnection
+- Connects to the space-server with exponential backoff reconnection
 - Bridges the Yjs document to the OpenClaw messaging system
 - Filters incoming prompts by target (bot name or "*" for any bot)
 - Writes streaming chunks to reply-to-stream and final responses to reply-to-array
@@ -89,10 +89,10 @@ timezone     string   IANA timezone (e.g. "America/New_York")
 
 ## Authentication
 
-The yjs-server authenticates WebSocket connections via a token query parameter:
+The space-server authenticates WebSocket connections via a token query parameter:
 
 ```
-ws://yjs-server:1234?token=YOUR_TOKEN
+ws://space-server:1234?token=YOUR_TOKEN
 
 If the SPA runs inside an iframe on OpenClaw.ai, it requests connection
 info (host, token, name) from the parent frame via postMessage.
@@ -106,7 +106,7 @@ import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 
 const doc = new Y.Doc();
-const provider = new WebsocketProvider('ws://yjs-server:1234', 'doc', doc, {
+const provider = new WebsocketProvider('ws://space-server:1234', 'doc', doc, {
   params: { token: 'YOUR_TOKEN' },
 });
 

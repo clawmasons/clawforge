@@ -66,7 +66,7 @@ export class YjsClient {
     ws.binaryType = "arraybuffer";
 
     ws.on("open", () => {
-      console.log("[yjs-plugin] Connected to yjs-server");
+      console.log("[yjs-plugin] Connected to space-server");
       this.backoff = INITIAL_BACKOFF_MS;
 
       // Send sync step 1
@@ -118,7 +118,7 @@ export class YjsClient {
     this.doc.on("update", onUpdate);
 
     ws.on("close", () => {
-      console.log("[yjs-plugin] Disconnected from yjs-server");
+      console.log("[yjs-plugin] Disconnected from space-server");
       this.doc.off("update", onUpdate);
       this.ws = null;
       this.scheduleReconnect();

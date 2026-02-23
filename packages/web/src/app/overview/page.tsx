@@ -161,7 +161,7 @@ Phases:
           polling. Just real-time sync.
         </p>
         <pre className="mt-8 rounded-xl bg-[var(--color-surface)] p-6 font-[family-name:var(--font-mono)] text-base leading-relaxed text-[var(--color-ink)] text-center">
-{`Browser (SPA) ←→ yjs-server ←→ Clawbot
+{`Browser (SPA) ←→ space-server ←→ Clawbot
                shared Y.Doc`}
         </pre>
         <p className="mt-6 text-lg text-[var(--color-muted)] max-w-2xl">

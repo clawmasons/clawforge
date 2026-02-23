@@ -1,11 +1,11 @@
-# Yjs App Skill
+# Space App Skill
 
 Build a single-page application that sends prompts to a clawbot and receives streaming responses over a shared Yjs document.
 
 ## Architecture
 
 ```
- SPA (browser)                    yjs-server (ws://...)                 clawbot (yjs-plugin)
+ SPA (browser)                    space-server (ws://...)                 clawbot (yjs-plugin)
  ─────────────                    ────────────────────                  ────────────────────
  Connect via WebSocket ──────────► Shared Y.Doc ◄────────────────────── Observes Y.Doc
  Append Y.Map to prompts array    Syncs all peers                      Reads new prompts
@@ -61,9 +61,9 @@ The presence key is derived from the entity's display name by lowercasing, repla
 
 ## Authentication
 
-The yjs-server authenticates WebSocket connections via a `token` query parameter (`ws://host:port?token=TOKEN`). The SPA needs three values to connect:
+The space-server authenticates WebSocket connections via a `token` query parameter (`ws://host:port?token=TOKEN`). The SPA needs three values to connect:
 
-- **`host`** — the WebSocket URL of the yjs-server (e.g. `ws://yjs-server:1234`)
+- **`host`** — the WebSocket URL of the space-server (e.g. `ws://space-server:1234`)
 - **`token`** — the auth token passed as `?token=` on the WebSocket URL
 - **`name`** — the user's display name (used to derive the presence key)
 
@@ -90,7 +90,7 @@ window.addEventListener('message', (event) => {
   if (event.data?.type === 'REQUEST_CONNECTION_INFO') {
     event.source.postMessage({
       type: 'CONNECTION_INFO',
-      host: 'ws://yjs-server:1234',
+      host: 'ws://space-server:1234',
       token: 'the-auth-token',
       name: 'Alice',
     }, event.origin);
@@ -128,7 +128,7 @@ function requestConnectionInfo() {
 
 ## Connecting to the Yjs Document
 
-Use `y-websocket` to connect to the yjs-server. Pass `host` as the server URL and `token` via the query parameter. The document name in the URL path determines which shared document you join.
+Use `y-websocket` to connect to the space-server. Pass `host` as the server URL and `token` via the query parameter. The document name in the URL path determines which shared document you join.
 
 ```js
 import * as Y from 'yjs';
@@ -138,7 +138,7 @@ const doc = new Y.Doc();
 
 function connectToYjs(host, token, name) {
   const provider = new WebsocketProvider(
-    host,             // e.g. ws://yjs-server:1234
+    host,             // e.g. ws://space-server:1234
     'doc-name',       // room / document name
     doc,
     { params: { token } }
@@ -148,7 +148,7 @@ function connectToYjs(host, token, name) {
   const presence = doc.getMap('presence');
 
   provider.on('sync', () => {
-    console.log('Synced with yjs-server');
+    console.log('Synced with space-server');
   });
 }
 ```

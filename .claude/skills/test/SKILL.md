@@ -28,12 +28,12 @@ pnpm --filter @clawforge/server test
 
 **Pass criteria:** exit code 0
 
-## Phase 1b: Yjs Server Tests
+## Phase 1b: Space Server Tests
 
-Run the yjs-server package's unit tests (math-bot integration + watcher tests):
+Run the space-server package's unit tests (math-bot integration + watcher tests):
 
 ```bash
-pnpm --filter @clawforge/yjs-server test
+pnpm --filter @clawforge/space-server test
 ```
 
 **Pass criteria:** exit code 0
@@ -176,7 +176,7 @@ pnpm --filter @clawforge/yjs-server test
 3. Run unit tests in the copy:
    ```bash
    cd /tmp/clawforge-test-copy && pnpm --filter @clawforge/server test
-   cd /tmp/clawforge-test-copy && pnpm --filter @clawforge/yjs-server test
+   cd /tmp/clawforge-test-copy && pnpm --filter @clawforge/space-server test
    ```
 4. Remove the copy:
    ```bash

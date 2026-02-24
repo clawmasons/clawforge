@@ -15,9 +15,9 @@ Then run `pnpm install` at the monorepo root.
 ## Imports
 
 ```ts
-import { ClawforgeYjsClient } from "@clawforge/space-client";
+import { SpaceClient } from "@clawforge/space-client";
 // Optional — only needed if you inspect error payloads or event types:
-import type { PermissionError, ClawforgeYjsClientOptions, ClawforgeYjsClientEvents } from "@clawforge/space-client";
+import type { PermissionError, SpaceClientOptions, SpaceClientEvents } from "@clawforge/space-client";
 ```
 
 In Node.js you also need the `ws` package:
@@ -33,7 +33,7 @@ The constructor opens a WebSocket immediately and begins the root document sync 
 ### Browser
 
 ```ts
-const client = new ClawforgeYjsClient({
+const client = new SpaceClient({
   url: "ws://localhost:4444",
 });
 ```
@@ -45,7 +45,7 @@ Pass the `ws` WebSocket constructor since `globalThis.WebSocket` does not exist 
 ```ts
 import { WebSocket } from "ws";
 
-const client = new ClawforgeYjsClient({
+const client = new SpaceClient({
   url: "ws://localhost:4444",
   WebSocket: WebSocket as unknown as typeof globalThis.WebSocket,
 });
@@ -54,7 +54,7 @@ const client = new ClawforgeYjsClient({
 ### With authentication
 
 ```ts
-const client = new ClawforgeYjsClient({
+const client = new SpaceClient({
   url: "ws://localhost:4444",
   token: "my-auth-token", // appended as ?token=my-auth-token
   WebSocket: WebSocket as unknown as typeof globalThis.WebSocket,
@@ -64,7 +64,7 @@ const client = new ClawforgeYjsClient({
 ### With reconnection
 
 ```ts
-const client = new ClawforgeYjsClient({
+const client = new SpaceClient({
   url: "ws://localhost:4444",
   WebSocket: WebSocket as unknown as typeof globalThis.WebSocket,
   reconnect: true,    // default: false
@@ -202,9 +202,9 @@ client.close();
 ```ts
 import * as Y from "yjs";
 import { WebSocket } from "ws";
-import { ClawforgeYjsClient } from "@clawforge/space-client";
+import { SpaceClient } from "@clawforge/space-client";
 
-const client = new ClawforgeYjsClient({
+const client = new SpaceClient({
   url: "ws://localhost:4444",
   token: "bot-token",
   WebSocket: WebSocket as unknown as typeof globalThis.WebSocket,

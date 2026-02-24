@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createServer, type Server as HttpServer } from "node:http";
 import * as Y from "yjs";
 import { WebSocketServer, WebSocket } from "ws";
-import { ClawforgeYjsClient } from "@clawforge/space-client";
+import { SpaceClient } from "@clawforge/space-client";
 import {
   setupYjsConnection,
   onWatch,
@@ -16,7 +16,7 @@ import {
 
 const SAFE_MATH_RE = /^[\d+\-*/().%\s]+$/;
 
-function startMathBot(client: ClawforgeYjsClient, botName: string): void {
+function startMathBot(client: SpaceClient, botName: string): void {
   const promptsDoc = client.subspaces.get("prompts")!;
   const presenceDoc = client.subspaces.get("presence")!;
   const prompts: Y.Array<Y.Map<unknown>> = promptsDoc.getArray("prompts");
@@ -161,8 +161,8 @@ describe("math-bot integration", () => {
   let httpServer: HttpServer;
   let wss: WebSocketServer;
   let serverDoc: Y.Doc;
-  let botClient: ClawforgeYjsClient;
-  let studentClient: ClawforgeYjsClient;
+  let botClient: SpaceClient;
+  let studentClient: SpaceClient;
   let port: number;
   let watchEvents: WatchEvent[];
   let unsubWatch: () => void;
@@ -189,7 +189,7 @@ describe("math-bot integration", () => {
     port = typeof addr === "object" && addr !== null ? addr.port : 0;
 
     // 2. Connect bot, wait for root sync, then request subspaces
-    botClient = new ClawforgeYjsClient({
+    botClient = new SpaceClient({
       url: `ws://127.0.0.1:${port}`,
       WebSocket: WebSocket as unknown as typeof globalThis.WebSocket,
     });
@@ -202,7 +202,7 @@ describe("math-bot integration", () => {
     startMathBot(botClient, "math-bot");
 
     // 4. Connect student, wait for root sync, then request subspaces
-    studentClient = new ClawforgeYjsClient({
+    studentClient = new SpaceClient({
       url: `ws://127.0.0.1:${port}`,
       WebSocket: WebSocket as unknown as typeof globalThis.WebSocket,
     });

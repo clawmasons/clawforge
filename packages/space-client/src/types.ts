@@ -1,6 +1,6 @@
 import type WebSocket from "ws";
 
-export interface ClawforgeYjsClientOptions {
+export interface SpaceClientOptions {
   /** WebSocket URL to connect to (e.g. ws://localhost:4444) */
   url: string;
   /** Optional auth token appended as ?token= query param */
@@ -20,7 +20,7 @@ export interface PermissionError {
   subspaces: string[];
 }
 
-export type ClawforgeYjsClientEvents = {
+export type SpaceClientEvents = {
   synced: () => void;
   permissionError: (err: PermissionError) => void;
   awareness: (update: Uint8Array) => void;

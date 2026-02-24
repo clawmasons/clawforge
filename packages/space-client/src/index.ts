@@ -1,4 +1,4 @@
-export { ClawforgeYjsClient } from "./client.js";
+export { SpaceClient } from "./client.js";
 export {
   MSG_SYNC,
   MSG_AWARENESS,
@@ -6,7 +6,7 @@ export {
   MSG_PERMISSION_ERROR,
 } from "./protocol.js";
 export type {
-  ClawforgeYjsClientOptions,
+  SpaceClientOptions,
   PermissionError,
-  ClawforgeYjsClientEvents,
+  SpaceClientEvents,
 } from "./types.js";

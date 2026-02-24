@@ -7,9 +7,9 @@ Works in both browser (native WebSocket) and Node.js (`ws`) environments.
 ## Usage
 
 ```ts
-import { ClawforgeYjsClient } from "@clawforge/space-client";
+import { SpaceClient } from "@clawforge/space-client";
 
-const client = new ClawforgeYjsClient({
+const client = new SpaceClient({
   url: "ws://localhost:4444",
   token: "optional-auth-token",
 });
@@ -31,7 +31,7 @@ For Node.js, pass the `ws` WebSocket constructor:
 ```ts
 import { WebSocket } from "ws";
 
-const client = new ClawforgeYjsClient({
+const client = new SpaceClient({
   url: "ws://localhost:4444",
   WebSocket,
 });

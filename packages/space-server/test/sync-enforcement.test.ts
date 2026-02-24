@@ -3,19 +3,19 @@ import assert from "node:assert/strict";
 import { createServer, type Server as HttpServer } from "node:http";
 import * as Y from "yjs";
 import { WebSocketServer, WebSocket } from "ws";
-import { ClawforgeYjsClient, type PermissionError } from "@clawforge/space-client";
+import { SpaceClient, type PermissionError } from "@clawforge/space-client";
 import { setupYjsConnection } from "../src/sync.js";
 
-/** Create a ClawforgeYjsClient connected to the test server. */
-function createClient(port: number): ClawforgeYjsClient {
-  return new ClawforgeYjsClient({
+/** Create a SpaceClient connected to the test server. */
+function createClient(port: number): SpaceClient {
+  return new SpaceClient({
     url: `ws://127.0.0.1:${port}`,
     WebSocket: WebSocket as unknown as typeof globalThis.WebSocket,
   });
 }
 
 /** Collect permission errors from a client into an array. */
-function collectPermissionErrors(client: ClawforgeYjsClient): PermissionError[] {
+function collectPermissionErrors(client: SpaceClient): PermissionError[] {
   const errors: PermissionError[] = [];
   client.on("permissionError", (err) => errors.push(err));
   return errors;

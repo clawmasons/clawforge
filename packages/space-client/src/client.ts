@@ -9,14 +9,14 @@ import {
   MSG_PERMISSION_ERROR,
 } from "./protocol.js";
 import type {
-  ClawforgeYjsClientOptions,
-  ClawforgeYjsClientEvents,
+  SpaceClientOptions,
+  SpaceClientEvents,
   PermissionError,
 } from "./types.js";
 
-type Listener<K extends keyof ClawforgeYjsClientEvents> = ClawforgeYjsClientEvents[K];
+type Listener<K extends keyof SpaceClientEvents> = SpaceClientEvents[K];
 
-export class ClawforgeYjsClient {
+export class SpaceClient {
   readonly doc: Y.Doc;
   readonly subspaces = new Map<string, Y.Doc>();
 
@@ -37,8 +37,8 @@ export class ClawforgeYjsClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   private readonly listeners = new Map<
-    keyof ClawforgeYjsClientEvents,
-    Set<Listener<keyof ClawforgeYjsClientEvents>>
+    keyof SpaceClientEvents,
+    Set<Listener<keyof SpaceClientEvents>>
   >();
 
   private readonly onRootUpdate = (update: Uint8Array, origin: unknown) => {
@@ -50,7 +50,7 @@ export class ClawforgeYjsClient {
     this.ws.send(encoding.toUint8Array(encoder));
   };
 
-  constructor(opts: ClawforgeYjsClientOptions) {
+  constructor(opts: SpaceClientOptions) {
     this.url = opts.url;
     this.token = opts.token;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -69,29 +69,29 @@ export class ClawforgeYjsClient {
   }
 
   /** Subscribe to an event. */
-  on<K extends keyof ClawforgeYjsClientEvents>(
+  on<K extends keyof SpaceClientEvents>(
     event: K,
-    listener: ClawforgeYjsClientEvents[K],
+    listener: SpaceClientEvents[K],
   ): void {
     let set = this.listeners.get(event);
     if (!set) {
       set = new Set();
       this.listeners.set(event, set);
     }
-    set.add(listener as Listener<keyof ClawforgeYjsClientEvents>);
+    set.add(listener as Listener<keyof SpaceClientEvents>);
   }
 
   /** Unsubscribe from an event. */
-  off<K extends keyof ClawforgeYjsClientEvents>(
+  off<K extends keyof SpaceClientEvents>(
     event: K,
-    listener: ClawforgeYjsClientEvents[K],
+    listener: SpaceClientEvents[K],
   ): void {
-    this.listeners.get(event)?.delete(listener as Listener<keyof ClawforgeYjsClientEvents>);
+    this.listeners.get(event)?.delete(listener as Listener<keyof SpaceClientEvents>);
   }
 
-  private emit<K extends keyof ClawforgeYjsClientEvents>(
+  private emit<K extends keyof SpaceClientEvents>(
     event: K,
-    ...args: Parameters<ClawforgeYjsClientEvents[K]>
+    ...args: Parameters<SpaceClientEvents[K]>
   ): void {
     const set = this.listeners.get(event);
     if (!set) return;
